@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include <limits.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -31,10 +32,26 @@
 #define PTHREAD_MUTEX_UNLOCKED  NULL
 #define PTHREAD_MUTEX_LOCKED    (void *)1UL
 
+static int rt_sched_policy;
+static int max_sched_priority;
+static bool resources_created;
+
 static void error_exit(int err, const char *msg)
 {
     fprintf(stderr, "qemu: %s: %s\n", msg, strerror(err));
     abort();
+}
+
+void qemu_realtime_init(int policy, int max_priority)
+{
+    assert(!resources_created);
+    rt_sched_policy = policy;
+    max_sched_priority = max_priority;
+}
+
+bool qemu_realtime_is_enabled(void)
+{
+    return rt_sched_policy != SCHED_OTHER;
 }
 
 void qemu_mutex_init(QemuMutex *mutex)
@@ -51,6 +68,7 @@ void qemu_mutex_init(QemuMutex *mutex)
     err = pthread_key_create(&mutex->locked, NULL);
     if (err)
         error_exit(err, __func__);
+    resources_created = true;
 }
 
 void qemu_mutex_destroy(QemuMutex *mutex)
@@ -116,6 +134,7 @@ void qemu_cond_destroy(QemuCond *cond)
     err = pthread_cond_destroy(&cond->cond);
     if (err)
         error_exit(err, __func__);
+    resources_created = true;
 }
 
 void qemu_cond_signal(QemuCond *cond)
@@ -484,6 +503,7 @@ void qemu_thread_create(QemuThread *thread,
     pthread_sigmask(SIG_SETMASK, &oldset, NULL);
 
     pthread_attr_destroy(&attr);
+    resources_created = true;
 }
 
 void qemu_thread_get_self(QemuThread *thread)

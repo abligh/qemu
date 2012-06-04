@@ -45,6 +45,16 @@ static void error_exit(int err, const char *msg)
     abort();
 }
 
+void qemu_realtime_init(int rt_sched_policy, int max_sched_priority)
+{
+    abort(); /* not supported */
+}
+
+bool qemu_realtime_is_enabled(void)
+{
+    return false;
+}
+
 void qemu_mutex_init(QemuMutex *mutex)
 {
     mutex->owner = 0;

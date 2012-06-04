@@ -19,6 +19,9 @@ typedef struct QemuThread QemuThread;
 #define QEMU_THREAD_JOINABLE 0
 #define QEMU_THREAD_DETACHED 1
 
+void qemu_realtime_init(int rt_sched_policy, int max_sched_priority);
+bool qemu_realtime_is_enabled(void);
+
 void qemu_mutex_init(QemuMutex *mutex);
 void qemu_mutex_destroy(QemuMutex *mutex);
 void qemu_mutex_lock(QemuMutex *mutex);
