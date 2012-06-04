@@ -56,11 +56,19 @@ bool qemu_realtime_is_enabled(void)
 
 void qemu_mutex_init(QemuMutex *mutex)
 {
-    int err;
+    int protocol = PTHREAD_PRIO_NONE;
     pthread_mutexattr_t mutexattr;
+    int err;
 
     pthread_mutexattr_init(&mutexattr);
     pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_ERRORCHECK);
+    if (rt_sched_policy != SCHED_OTHER) {
+        protocol = PTHREAD_PRIO_INHERIT;
+    }
+    err = pthread_mutexattr_setprotocol(&mutexattr, protocol);
+    if (err) {
+        error_exit(err, __func__);
+    }
     err = pthread_mutex_init(&mutex->lock, &mutexattr);
     pthread_mutexattr_destroy(&mutexattr);
     if (err)
