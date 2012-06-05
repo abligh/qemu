@@ -473,10 +473,12 @@ void qemu_thread_create(QemuThread *thread,
                        void *(*start_routine)(void*),
                        void *arg, int flags)
 {
+    struct sched_param sched_param;
     sigset_t set, oldset;
-    int err;
     pthread_attr_t attr;
     QemuThreadData *data;
+    int sched_policy;
+    int err;
 
     data = g_malloc(sizeof(*data));
     data->start_routine = start_routine;
@@ -488,6 +490,31 @@ void qemu_thread_create(QemuThread *thread,
     }
     if (flags & QEMU_THREAD_DETACHED) {
         err = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        if (err) {
+            error_exit(err, __func__);
+        }
+    }
+
+    if (rt_sched_policy != SCHED_OTHER) {
+        err = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+        if (err) {
+            error_exit(err, __func__);
+        }
+        if (flags & QEMU_THREAD_PRIO_MAX) {
+            sched_policy = rt_sched_policy;
+            sched_param.sched_priority = max_sched_priority;
+        } else if (flags & QEMU_THREAD_PRIO_RT) {
+            sched_policy = rt_sched_policy;
+            sched_param.sched_priority = max_sched_priority - 1;
+        } else {
+            sched_policy = SCHED_OTHER;
+            sched_param.sched_priority = 0;
+        }
+        err = pthread_attr_setschedpolicy(&attr, sched_policy);
+        if (err) {
+            error_exit(err, __func__);
+        }
+        err = pthread_attr_setschedparam(&attr, &sched_param);
         if (err) {
             error_exit(err, __func__);
         }

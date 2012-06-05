@@ -19,6 +19,10 @@ typedef struct QemuThread QemuThread;
 #define QEMU_THREAD_JOINABLE 0
 #define QEMU_THREAD_DETACHED 1
 
+#define QEMU_THREAD_PRIO_NRT 0  /* non-realtime, lowest priority (default) */
+#define QEMU_THREAD_PRIO_RT  2  /* realtime, 1 level below maximum priority */
+#define QEMU_THREAD_PRIO_MAX 4  /* realtime, maximum priority */
+
 void qemu_realtime_init(int rt_sched_policy, int max_sched_priority);
 bool qemu_realtime_is_enabled(void);
 
