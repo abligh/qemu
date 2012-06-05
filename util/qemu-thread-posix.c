@@ -29,6 +29,8 @@
 #include "qemu/atomic.h"
 #include "qemu/rcu.h"
 
+#define BROKEN_CONDVAR_WITH_PI_MUTEX 1
+
 #define PTHREAD_MUTEX_UNLOCKED  NULL
 #define PTHREAD_MUTEX_LOCKED    (void *)1UL
 
@@ -63,7 +65,15 @@ void qemu_mutex_init(QemuMutex *mutex)
     pthread_mutexattr_init(&mutexattr);
     pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_ERRORCHECK);
     if (rt_sched_policy != SCHED_OTHER) {
+#ifdef BROKEN_CONDVAR_WITH_PI_MUTEX
+        protocol = PTHREAD_PRIO_PROTECT;
+        err = pthread_mutexattr_setprioceiling(&mutexattr, max_sched_priority);
+        if (err) {
+            error_exit(err, __func__);
+        }
+#else
         protocol = PTHREAD_PRIO_INHERIT;
+#endif
     }
     err = pthread_mutexattr_setprotocol(&mutexattr, protocol);
     if (err) {
@@ -515,8 +525,13 @@ void qemu_thread_create(QemuThread *thread,
             sched_policy = rt_sched_policy;
             sched_param.sched_priority = max_sched_priority - 1;
         } else {
+#ifdef BROKEN_CONDVAR_WITH_PI_MUTEX
+            sched_policy = SCHED_FIFO;
+            sched_param.sched_priority = 1;
+#else
             sched_policy = SCHED_OTHER;
             sched_param.sched_priority = 0;
+#endif
         }
         err = pthread_attr_setschedpolicy(&attr, sched_policy);
         if (err) {
