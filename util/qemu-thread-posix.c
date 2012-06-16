@@ -56,6 +56,12 @@ bool qemu_realtime_is_enabled(void)
     return rt_sched_policy != SCHED_OTHER;
 }
 
+void qemu_realtime_get_parameters(int *policy, int *max_priority)
+{
+    *policy = rt_sched_policy;
+    *max_priority = max_sched_priority;
+}
+
 void qemu_mutex_init(QemuMutex *mutex)
 {
     int protocol = PTHREAD_PRIO_NONE;

@@ -25,6 +25,8 @@ typedef struct QemuThread QemuThread;
 
 void qemu_realtime_init(int rt_sched_policy, int max_sched_priority);
 bool qemu_realtime_is_enabled(void);
+void qemu_realtime_get_parameters(int *rt_sched_policy,
+                                  int *max_sched_priority);
 
 void qemu_mutex_init(QemuMutex *mutex);
 void qemu_mutex_destroy(QemuMutex *mutex);

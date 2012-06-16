@@ -55,6 +55,12 @@ bool qemu_realtime_is_enabled(void)
     return false;
 }
 
+void qemu_realtime_get_parameters(int *policy, int *max_priority)
+{
+    *policy = 0;
+    *max_priority = 0;
+}
+
 void qemu_mutex_init(QemuMutex *mutex)
 {
     mutex->owner = 0;
