@@ -2938,7 +2938,6 @@ int main(int argc, char **argv, char **envp)
 
     runstate_init();
 
-    init_clocks();
     rtc_clock = QEMU_CLOCK_HOST;
 
     qemu_cache_utils_init(envp);
@@ -4061,6 +4060,8 @@ int main(int argc, char **argv, char **envp)
         os_pidfile_error();
         exit(1);
     }
+
+    init_clocks();
 
     /* init the memory */
     if (ram_size == 0) {
