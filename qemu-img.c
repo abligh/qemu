@@ -1558,13 +1558,14 @@ static int img_rebase(int argc, char **argv)
             error_report("Could not open old backing file '%s'", backing_name);
             goto out;
         }
-
-        bs_new_backing = bdrv_new("new_backing");
-        ret = bdrv_open(bs_new_backing, out_baseimg, BDRV_O_FLAGS,
+        if (strcmp("-", out_baseimg)) {
+            bs_new_backing = bdrv_new("new_backing");
+            ret = bdrv_open(bs_new_backing, out_baseimg, BDRV_O_FLAGS,
                         new_backing_drv);
-        if (ret) {
-            error_report("Could not open new backing file '%s'", out_baseimg);
-            goto out;
+            if (ret) {
+                error_report("Could not open new backing file '%s'", out_baseimg);
+                goto out;
+            }
         }
     }
 
@@ -1580,7 +1581,7 @@ static int img_rebase(int argc, char **argv)
     if (!unsafe) {
         uint64_t num_sectors;
         uint64_t old_backing_num_sectors;
-        uint64_t new_backing_num_sectors;
+        uint64_t new_backing_num_sectors=0;
         uint64_t sector;
         int n;
         uint8_t * buf_old;
@@ -1592,7 +1593,8 @@ static int img_rebase(int argc, char **argv)
 
         bdrv_get_geometry(bs, &num_sectors);
         bdrv_get_geometry(bs_old_backing, &old_backing_num_sectors);
-        bdrv_get_geometry(bs_new_backing, &new_backing_num_sectors);
+        if (bs_new_backing)
+            bdrv_get_geometry(bs_new_backing, &new_backing_num_sectors);
 
         local_progress = (float)100 /
             (num_sectors / MIN(num_sectors, IO_BUF_SIZE / 512));
@@ -1629,7 +1631,7 @@ static int img_rebase(int argc, char **argv)
                 }
             }
 
-            if (sector >= new_backing_num_sectors) {
+            if (sector >= new_backing_num_sectors || !bs_new_backing) {
                 memset(buf_new, 0, n * BDRV_SECTOR_SIZE);
             } else {
                 if (sector + n > new_backing_num_sectors) {
@@ -1675,7 +1677,11 @@ static int img_rebase(int argc, char **argv)
      * backing file are overwritten in the COW file now, so the visible content
      * doesn't change when we switch the backing file.
      */
-    ret = bdrv_change_backing_file(bs, out_baseimg, out_basefmt);
+    if (bs_new_backing)
+        ret = bdrv_change_backing_file(bs, out_baseimg, out_basefmt);
+    else 
+        ret = bdrv_change_backing_file(bs, NULL, NULL);
+
     if (ret == -ENOSPC) {
         error_report("Could not change the backing file to '%s': No "
                      "space left in the file header", out_baseimg);
