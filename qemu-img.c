@@ -1558,7 +1558,7 @@ static int img_rebase(int argc, char **argv)
             error_report("Could not open old backing file '%s'", backing_name);
             goto out;
         }
-        if (strcmp("-", out_baseimg)) {
+        if (out_baseimg[0]) {
             bs_new_backing = bdrv_new("new_backing");
             ret = bdrv_open(bs_new_backing, out_baseimg, BDRV_O_FLAGS,
                         new_backing_drv);
