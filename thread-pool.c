@@ -139,7 +139,8 @@ static void do_spawn_thread(ThreadPool *pool)
     pool->new_threads--;
     pool->pending_threads++;
 
-    qemu_thread_create(&t, worker_thread, pool, QEMU_THREAD_DETACHED);
+    qemu_thread_create(&t, worker_thread, pool,
+                       QEMU_THREAD_DETACHED | QEMU_THREAD_PRIO_MAX);
 }
 
 static void spawn_thread_bh_fn(void *opaque)
