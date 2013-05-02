@@ -22,11 +22,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "qemu/thread.h"
 #include "qemu/timer.h"
 #include "sysemu/sysemu.h"
 #include "hw/timer/i8254.h"
 #include "hw/timer/i8254_internal.h"
 #include "sysemu/kvm.h"
+
+#include <fcntl.h>
+#include <dirent.h>
+#include <sched.h>
 
 #define KVM_PIT_REINJECT_BIT 0
 
@@ -247,6 +252,66 @@ static void kvm_pit_vm_state_change(void *opaque, int running,
     }
 }
 
+static int kvm_pit_set_kthread_priority(void)
+{
+    struct sched_param param;
+    struct dirent *dirent;
+    size_t comm_buf_size;
+    char *kthread_name;
+    long kthread_pid;
+    int sched_policy;
+    char *comm_path;
+    char *comm_buf;
+    DIR *proc_dir;
+    char *endptr;
+    int comm_fd;
+    int ret = 0;
+
+    if (asprintf(&kthread_name, "kvm-pit/%d\n", getpid()) < 0) {
+        abort();
+    }
+    comm_buf_size = strlen(kthread_name) + 1;
+    comm_buf = g_malloc0(comm_buf_size);
+
+    proc_dir = opendir("/proc");
+    if (!proc_dir) {
+        ret = -errno;
+        goto err;
+    }
+    while ((dirent = readdir(proc_dir)) != NULL) {
+        errno = 0;
+        kthread_pid = strtol(dirent->d_name, &endptr, 10);
+        if (errno != 0  || *endptr != '\0') {
+            continue;
+        }
+        if (asprintf(&comm_path, "/proc/%s/comm", dirent->d_name) < 0) {
+            abort();
+        }
+        comm_fd = open(comm_path, O_RDONLY);
+        free(comm_path);
+        if (comm_fd < 0) {
+            continue;
+        }
+        if (read(comm_fd, comm_buf, comm_buf_size - 1) != comm_buf_size - 1 ||
+            strcmp(comm_buf, kthread_name) != 0) {
+            close(comm_fd);
+            continue;
+        }
+        qemu_realtime_get_parameters(&sched_policy, &param.sched_priority);
+        ret = sched_setscheduler(kthread_pid, sched_policy, &param);
+
+        close(comm_fd);
+        break;
+    }
+
+    closedir(proc_dir);
+
+err:
+    g_free(comm_buf);
+    free(kthread_name);
+    return ret;
+}
+
 static void kvm_pit_realizefn(DeviceState *dev, Error **errp)
 {
     PITCommonState *pit = PIT_COMMON(dev);
@@ -295,6 +360,10 @@ static void kvm_pit_realizefn(DeviceState *dev, Error **errp)
     qemu_add_vm_change_state_handler(kvm_pit_vm_state_change, s);
 
     kpc->parent_realize(dev, errp);
+
+    if (qemu_realtime_is_enabled()) {
+        kvm_pit_set_kthread_priority();
+    }
 }
 
 static Property kvm_pit_properties[] = {
