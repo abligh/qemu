@@ -452,7 +452,7 @@ static void *thread_start_routine(void *arg)
 
 void qemu_thread_create(QemuThread *thread,
                        void *(*start_routine)(void*),
-                       void *arg, int mode)
+                       void *arg, int flags)
 {
     sigset_t set, oldset;
     int err;
@@ -467,7 +467,7 @@ void qemu_thread_create(QemuThread *thread,
     if (err) {
         error_exit(err, __func__);
     }
-    if (mode == QEMU_THREAD_DETACHED) {
+    if (flags & QEMU_THREAD_DETACHED) {
         err = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
         if (err) {
             error_exit(err, __func__);

@@ -52,7 +52,7 @@ void qemu_event_destroy(QemuEvent *ev);
 
 void qemu_thread_create(QemuThread *thread,
                         void *(*start_routine)(void *),
-                        void *arg, int mode);
+                        void *arg, int flags);
 void *qemu_thread_join(QemuThread *thread);
 void qemu_thread_get_self(QemuThread *thread);
 bool qemu_thread_is_self(QemuThread *thread);

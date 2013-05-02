@@ -293,7 +293,7 @@ struct QemuThreadData {
     /* Passed to win32_start_routine.  */
     void             *(*start_routine)(void *);
     void             *arg;
-    short             mode;
+    short             flags;
 
     /* Only used for joinable threads. */
     bool              exited;
@@ -309,7 +309,7 @@ static unsigned __stdcall win32_start_routine(void *arg)
     void *(*start_routine)(void *) = data->start_routine;
     void *thread_arg = data->arg;
 
-    if (data->mode == QEMU_THREAD_DETACHED) {
+    if (data->flags & QEMU_THREAD_DETACHED) {
         g_free(data);
         data = NULL;
     }
@@ -324,7 +324,7 @@ void qemu_thread_exit(void *arg)
     QemuThreadData *data = qemu_thread_data;
 
     if (data) {
-        assert(data->mode != QEMU_THREAD_DETACHED);
+        assert(!(data->flags & QEMU_THREAD_DETACHED));
         data->ret = arg;
         EnterCriticalSection(&data->cs);
         data->exited = true;
@@ -357,7 +357,7 @@ void *qemu_thread_join(QemuThread *thread)
         CloseHandle(handle);
     }
     ret = data->ret;
-    assert(data->mode != QEMU_THREAD_DETACHED);
+    assert(!(data->flags & QEMU_THREAD_DETACHED));
     DeleteCriticalSection(&data->cs);
     g_free(data);
     return ret;
@@ -365,7 +365,7 @@ void *qemu_thread_join(QemuThread *thread)
 
 void qemu_thread_create(QemuThread *thread,
                        void *(*start_routine)(void *),
-                       void *arg, int mode)
+                       void *arg, int flags)
 {
     HANDLE hThread;
     struct QemuThreadData *data;
@@ -373,10 +373,10 @@ void qemu_thread_create(QemuThread *thread,
     data = g_malloc(sizeof *data);
     data->start_routine = start_routine;
     data->arg = arg;
-    data->mode = mode;
+    data->flags = flags;
     data->exited = false;
 
-    if (data->mode != QEMU_THREAD_DETACHED) {
+    if (!(data->flags & QEMU_THREAD_DETACHED)) {
         InitializeCriticalSection(&data->cs);
     }
 
@@ -386,7 +386,7 @@ void qemu_thread_create(QemuThread *thread,
         error_exit(GetLastError(), __func__);
     }
     CloseHandle(hThread);
-    thread->data = (mode == QEMU_THREAD_DETACHED) ? NULL : data;
+    thread->data = (flags & QEMU_THREAD_DETACHED) ? NULL : data;
 }
 
 void qemu_thread_get_self(QemuThread *thread)
@@ -405,7 +405,7 @@ HANDLE qemu_thread_get_handle(QemuThread *thread)
         return NULL;
     }
 
-    assert(data->mode != QEMU_THREAD_DETACHED);
+    assert(!(data->flags & QEMU_THREAD_DETACHED));
     EnterCriticalSection(&data->cs);
     if (!data->exited) {
         handle = OpenThread(SYNCHRONIZE | THREAD_SUSPEND_RESUME, FALSE,
