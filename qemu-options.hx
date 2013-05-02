@@ -2588,11 +2588,13 @@ STEXI
 Do not start CPU at startup (you must type 'c' in the monitor).
 ETEXI
 
+#ifndef _WIN32
 DEF("realtime", HAS_ARG, QEMU_OPTION_realtime,
     "-realtime [mlock=on|off]\n"
     "                run qemu with realtime features\n"
     "                mlock=on|off controls mlock support (default: on)\n",
     QEMU_ARCH_ALL)
+#endif
 STEXI
 @item -realtime mlock=on|off
 @findex -realtime

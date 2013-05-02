@@ -39,6 +39,7 @@
 #include "sysemu/sysemu.h"
 #include "net/slirp.h"
 #include "qemu-options.h"
+#include "qemu/config-file.h"
 
 #ifdef CONFIG_LINUX
 #include <sys/prctl.h>
@@ -52,6 +53,7 @@ static struct passwd *user_pwd;
 static const char *chroot_dir;
 static int daemonize;
 static int fds[2];
+static bool enable_mlock;
 
 void os_setup_early_signal_handling(void)
 {
@@ -167,6 +169,8 @@ void os_set_proc_name(const char *s)
  */
 void os_parse_cmd_args(int index, const char *optarg)
 {
+    QemuOpts *opts;
+
     switch (index) {
 #ifdef CONFIG_SLIRP
     case QEMU_OPTION_smb:
@@ -192,6 +196,13 @@ void os_parse_cmd_args(int index, const char *optarg)
         fips_set_state(true);
         break;
 #endif
+    case QEMU_OPTION_realtime:
+        opts = qemu_opts_parse(qemu_find_opts("realtime"), optarg, 0);
+        if (!opts) {
+            exit(1);
+        }
+        enable_mlock = qemu_opt_get_bool(opts, "mlock", true);
+        break;
     }
 }
 
@@ -282,6 +293,14 @@ void os_daemonize(void)
     }
 }
 
+void os_setup_realtime(void)
+{
+    if (enable_mlock && mlockall(MCL_CURRENT | MCL_FUTURE) < 0) {
+        perror("mlockall");
+        exit(1);
+    }
+}
+
 void os_setup_post(void)
 {
     int fd = 0;
@@ -362,16 +381,4 @@ int qemu_create_pidfile(const char *filename)
 bool is_daemonized(void)
 {
     return daemonize;
-}
-
-int os_mlock(void)
-{
-    int ret = 0;
-
-    ret = mlockall(MCL_CURRENT | MCL_FUTURE);
-    if (ret < 0) {
-        perror("mlockall");
-    }
-
-    return ret;
 }
