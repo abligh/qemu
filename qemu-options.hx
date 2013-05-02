@@ -2590,8 +2590,10 @@ ETEXI
 
 #ifndef _WIN32
 DEF("realtime", HAS_ARG, QEMU_OPTION_realtime,
-    "-realtime [mlock=on|off]\n"
+    "-realtime maxprio=prio[,policy=ff|rr|ts][,mlock=on|off]\n"
     "                run qemu with realtime features\n"
+    "                maxprio=maximum priority of QEMU threads\n"
+    "                policy=scheduling policy of time-critical QEMU threads\n"
     "                mlock=on|off controls mlock support (default: on)\n",
     QEMU_ARCH_ALL)
 #endif

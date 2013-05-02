@@ -134,6 +134,7 @@ int main(int argc, char **argv)
 #include "sysemu/sysemu.h"
 #include "exec/gdbstub.h"
 #include "qemu/timer.h"
+#include "qemu/thread.h"
 #include "sysemu/char.h"
 #include "qemu/cache-utils.h"
 #include "sysemu/blockdev.h"
@@ -511,6 +512,17 @@ static QemuOptsList qemu_realtime_opts = {
         {
             .name = "mlock",
             .type = QEMU_OPT_BOOL,
+            .help = "lock all guest and host memory",
+        },
+        {
+            .name = "maxprio",
+            .type = QEMU_OPT_NUMBER,
+            .help = "maximum priority of QEMU threads"
+        },
+        {
+            .name = "policy",
+            .type = QEMU_OPT_STRING,
+            .help = "scheduling policy of time-critical QEMU threads"
         },
         { /* end of list */ }
     },
@@ -2639,6 +2651,10 @@ static QEMUMachine *machine_parse(const char *name)
 
 static int tcg_init(void)
 {
+    if (qemu_realtime_is_enabled()) {
+        fprintf(stderr, "realtime mode is not compatible with TCG\n");
+        exit(1);
+    }
     tcg_exec_init(tcg_tb_size * 1024 * 1024);
     return 0;
 }

@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 /*needed for MAP_POPULATE before including qemu-options.h */
@@ -40,6 +41,7 @@
 #include "net/slirp.h"
 #include "qemu-options.h"
 #include "qemu/config-file.h"
+#include "qemu/thread.h"
 
 #ifdef CONFIG_LINUX
 #include <sys/prctl.h>
@@ -53,6 +55,8 @@ static struct passwd *user_pwd;
 static const char *chroot_dir;
 static int daemonize;
 static int fds[2];
+static int max_sched_priority;
+static int default_policy = SCHED_OTHER;
 static bool enable_mlock;
 
 void os_setup_early_signal_handling(void)
@@ -163,6 +167,20 @@ void os_set_proc_name(const char *s)
 #endif
 }
 
+static int parse_sched_policy(const char *policy_str)
+{
+    if (strcmp(policy_str, "ff") == 0) {
+        return SCHED_FIFO;
+    } else if (strcmp(policy_str, "rr") == 0) {
+        return SCHED_RR;
+    } else if (strcmp(policy_str, "ts") == 0) {
+        return SCHED_OTHER;
+    } else {
+        fprintf(stderr, "Invalid scheduling policy '%s'\n", policy_str);
+        exit(1);
+    }
+}
+
 /*
  * Parse OS specific command line options.
  * return 0 if option handled, -1 otherwise
@@ -170,6 +188,8 @@ void os_set_proc_name(const char *s)
 void os_parse_cmd_args(int index, const char *optarg)
 {
     QemuOpts *opts;
+    char buf[128];
+    int min_prio;
 
     switch (index) {
 #ifdef CONFIG_SLIRP
@@ -200,6 +220,21 @@ void os_parse_cmd_args(int index, const char *optarg)
         opts = qemu_opts_parse(qemu_find_opts("realtime"), optarg, 0);
         if (!opts) {
             exit(1);
+        }
+        if (get_param_value(buf, sizeof(buf), "maxprio", optarg) > 0) {
+            max_sched_priority = strtol(buf, NULL, 10);
+        }
+        if (get_param_value(buf, sizeof(buf), "policy", optarg) > 0) {
+            default_policy = parse_sched_policy(buf);
+        } else if (max_sched_priority > 0) {
+            default_policy = SCHED_FIFO;
+        }
+        if (default_policy != SCHED_OTHER) {
+            min_prio = sched_get_priority_min(default_policy) + 1;
+            if (max_sched_priority < min_prio) {
+                fprintf(stderr, "'maxprio' must be at least %d\n", min_prio);
+                exit(1);
+            }
         }
         enable_mlock = qemu_opt_get_bool(opts, "mlock", true);
         break;
@@ -295,10 +330,29 @@ void os_daemonize(void)
 
 void os_setup_realtime(void)
 {
+    static const char * const policy_str[] = {
+        [SCHED_FIFO] = "SCHED_FIFO",
+        [SCHED_RR]   = "SCHED_RR"
+    };
+    struct sched_param param = { .sched_priority = max_sched_priority };
+
     if (enable_mlock && mlockall(MCL_CURRENT | MCL_FUTURE) < 0) {
         perror("mlockall");
         exit(1);
     }
+
+    if (default_policy == SCHED_OTHER) {
+        return;
+    }
+
+    printf("Raising scheduling policy/priority to %s/%d\n",
+           policy_str[default_policy], max_sched_priority);
+
+    if (pthread_setschedparam(pthread_self(), default_policy, &param) != 0) {
+        perror("pthread_setschedparam");
+        exit(1);
+    }
+    qemu_realtime_init(default_policy, max_sched_priority);
 }
 
 void os_setup_post(void)
