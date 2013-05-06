@@ -24,6 +24,7 @@ void qemu_mutex_destroy(QemuMutex *mutex);
 void qemu_mutex_lock(QemuMutex *mutex);
 int qemu_mutex_trylock(QemuMutex *mutex);
 void qemu_mutex_unlock(QemuMutex *mutex);
+bool qemu_mutex_is_locked(QemuMutex *mutex);
 
 void qemu_cond_init(QemuCond *cond);
 void qemu_cond_destroy(QemuCond *cond);

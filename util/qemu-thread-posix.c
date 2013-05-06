@@ -28,6 +28,9 @@
 #include "qemu/atomic.h"
 #include "qemu/rcu.h"
 
+#define PTHREAD_MUTEX_UNLOCKED  NULL
+#define PTHREAD_MUTEX_LOCKED    (void *)1UL
+
 static void error_exit(int err, const char *msg)
 {
     fprintf(stderr, "qemu: %s: %s\n", msg, strerror(err));
@@ -45,6 +48,9 @@ void qemu_mutex_init(QemuMutex *mutex)
     pthread_mutexattr_destroy(&mutexattr);
     if (err)
         error_exit(err, __func__);
+    err = pthread_key_create(&mutex->locked, NULL);
+    if (err)
+        error_exit(err, __func__);
 }
 
 void qemu_mutex_destroy(QemuMutex *mutex)
@@ -52,6 +58,9 @@ void qemu_mutex_destroy(QemuMutex *mutex)
     int err;
 
     err = pthread_mutex_destroy(&mutex->lock);
+    if (err)
+        error_exit(err, __func__);
+    err = pthread_key_delete(mutex->locked);
     if (err)
         error_exit(err, __func__);
 }
@@ -63,20 +72,32 @@ void qemu_mutex_lock(QemuMutex *mutex)
     err = pthread_mutex_lock(&mutex->lock);
     if (err)
         error_exit(err, __func__);
+    pthread_setspecific(mutex->locked, PTHREAD_MUTEX_LOCKED);
 }
 
 int qemu_mutex_trylock(QemuMutex *mutex)
 {
-    return pthread_mutex_trylock(&mutex->lock);
+    int err;
+
+    err = pthread_mutex_trylock(&mutex->lock);
+    if (!err)
+        pthread_setspecific(mutex->locked, PTHREAD_MUTEX_LOCKED);
+    return err;
 }
 
 void qemu_mutex_unlock(QemuMutex *mutex)
 {
     int err;
 
+    pthread_setspecific(mutex->locked, PTHREAD_MUTEX_UNLOCKED);
     err = pthread_mutex_unlock(&mutex->lock);
     if (err)
         error_exit(err, __func__);
+}
+
+bool qemu_mutex_is_locked(QemuMutex *mutex)
+{
+    return pthread_getspecific(mutex->locked) == PTHREAD_MUTEX_LOCKED;
 }
 
 void qemu_cond_init(QemuCond *cond)
@@ -120,10 +141,12 @@ void qemu_cond_wait(QemuCond *cond, QemuMutex *mutex)
     int err;
 
     rcu_thread_offline();
+    pthread_setspecific(mutex->locked, PTHREAD_MUTEX_UNLOCKED);
     err = pthread_cond_wait(&cond->cond, &mutex->lock);
     rcu_thread_online();
     if (err)
         error_exit(err, __func__);
+    pthread_setspecific(mutex->locked, PTHREAD_MUTEX_LOCKED);
 }
 
 void qemu_sem_init(QemuSemaphore *sem, int init)

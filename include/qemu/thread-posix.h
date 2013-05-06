@@ -5,6 +5,7 @@
 
 struct QemuMutex {
     pthread_mutex_t lock;
+    pthread_key_t locked;
 };
 
 struct QemuCond {

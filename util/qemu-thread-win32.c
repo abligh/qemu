@@ -87,6 +87,11 @@ void qemu_mutex_unlock(QemuMutex *mutex)
     LeaveCriticalSection(&mutex->lock);
 }
 
+bool qemu_mutex_is_locked(QemuMutex *mutex)
+{
+    return mutex->owner == GetCurrentThreadId();
+}
+
 void qemu_cond_init(QemuCond *cond)
 {
     memset(cond, 0, sizeof(*cond));
