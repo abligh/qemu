@@ -22,6 +22,7 @@
 #include "qemu/sockets.h"
 #include "migration/block.h"
 #include "qemu/thread.h"
+#include "qemu/rcu.h"
 #include "qmp-commands.h"
 #include "trace.h"
 
@@ -520,6 +521,7 @@ static void *migration_thread(void *opaque)
         int64_t current_time;
         uint64_t pending_size;
 
+        rcu_quiescent_state();
         if (!qemu_file_rate_limit(s->file)) {
             DPRINTF("iterate\n");
             pending_size = qemu_savevm_state_pending(s->file, max_size);
