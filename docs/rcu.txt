@@ -187,6 +187,11 @@ Marking quiescent states is done with the following three APIs:
         thread.
 
 
+rcu_thread_offline() and rcu_thread_online() can be nested.  The end of
+the extended quiescent state will coincide with the outermost call to
+rcu_thread_online().
+
+
 The following APIs can be used to use RCU in a thread that is not
 created with qemu_thread_create():
 

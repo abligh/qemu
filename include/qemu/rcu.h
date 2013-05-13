@@ -78,6 +78,9 @@ struct rcu_reader_data {
     unsigned long ctr;
     bool waiting;
 
+    /* Data used by reader only */
+    unsigned offline;
+
     /* Data used for registry, protected by rcu_gp_lock */
     QLIST_ENTRY(rcu_reader_data) node;
 };
@@ -100,9 +103,14 @@ static inline void rcu_read_unlock(void)
 static inline void rcu_quiescent_state(void)
 {
     struct rcu_reader_data *p_rcu_reader = tls_get_rcu_reader();
+    unsigned ctr;
+
+    if (p_rcu_reader->offline > 0) {
+        return;
+    }
 
     /* Reuses smp_rmb() in the last rcu_read_unlock().  */
-    unsigned ctr = atomic_read(&rcu_gp_ctr);
+    ctr = atomic_read(&rcu_gp_ctr);
     atomic_xchg(&p_rcu_reader->ctr, ctr);
     if (atomic_read(&p_rcu_reader->waiting)) {
         atomic_set(&p_rcu_reader->waiting, false);
@@ -114,6 +122,10 @@ static inline void rcu_thread_offline(void)
 {
     struct rcu_reader_data *p_rcu_reader = tls_get_rcu_reader();
 
+    if (p_rcu_reader->offline++ > 0) {
+        return;
+    }
+
     atomic_xchg(&p_rcu_reader->ctr, 0);
     if (atomic_read(&p_rcu_reader->waiting)) {
         atomic_set(&p_rcu_reader->waiting, false);
@@ -123,7 +135,12 @@ static inline void rcu_thread_offline(void)
 
 static inline void rcu_thread_online(void)
 {
-    rcu_quiescent_state();
+    struct rcu_reader_data *p_rcu_reader = tls_get_rcu_reader();
+
+    assert(p_rcu_reader->offline != 0);
+    if (--p_rcu_reader->offline == 0) {
+        rcu_quiescent_state();
+    }
 }
 
 extern void synchronize_rcu(void);
