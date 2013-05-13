@@ -168,6 +168,35 @@ of "quiescent states", i.e. points where no RCU read-side critical
 section can be active.  All threads created with qemu_thread_create
 participate in the RCU mechanism and need to annotate such points.
 
+Luckily, in most cases no manual annotation is needed, because waiting
+on condition variables (qemu_cond_wait), semaphores (qemu_sem_wait,
+qemu_sem_timedwait) or events (qemu_event_wait) implicitly marks the thread
+as quiescent for the whole duration of the wait.  (There is an exception
+for semaphore waits with a zero timeout).
+
+Manual annotation is still needed in the following cases:
+
+- threads that spend their sleeping time in the kernel, for example
+  in a call to select(), poll(), sigwait() or WaitForMultipleObjects().
+  The QEMU I/O thread is an example of this case.  When running under
+  KVM, VCPUs are also in a quiescent state while running the guest.
+
+- threads that perform a lot of I/O.  In QEMU, the workers used for
+  aio=thread are an example of this case (see aio_worker in block/raw-*).
+
+- threads that run continuously until they exit.  The migration thread
+  is an example of this case.
+
+Regarding the second case, note that the workers run in the QEMU thread
+pool.  The thread pool uses semaphores for synchronization, hence it does
+report quiescent states periodically.  However, in some cases (e.g. NFS
+mounted with the "hard" option) the workers can take an arbitrarily long
+amount of time.  When this happens, synchronize_rcu() will not exit and
+call_rcu() callbacks will be delayed arbitrarily.  It is therefore a
+good idea to mark I/O system calls as quiescence points in the worker
+functions.
+
+
 Marking quiescent states is done with the following three APIs:
 
      void rcu_quiescent_state(void);
@@ -229,7 +258,9 @@ DIFFERENCES WITH LINUX
   type of the callback's argument to be the type of the first argument.
   call_rcu1 is the same as Linux's call_rcu.
 
-- Quiescent points must be marked explicitly in the thread.
+- Quiescent points must be marked explicitly unless the thread uses
+  condvars/semaphores/events for synchronization.  Note that mutexes
+  do not report quiescent points (see the first item above).
 
 
 RCU PATTERNS

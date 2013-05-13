@@ -12,6 +12,7 @@
  */
 #include "qemu-common.h"
 #include "qemu/thread.h"
+#include "qemu/rcu.h"
 #include <process.h>
 #include <assert.h>
 #include <limits.h>
@@ -187,7 +188,9 @@ void qemu_cond_wait(QemuCond *cond, QemuMutex *mutex)
      * leaving mutex unlocked before we wait on semaphore.
      */
     qemu_mutex_unlock(mutex);
+    rcu_thread_offline();
     WaitForSingleObject(cond->sema, INFINITE);
+    rcu_thread_online();
 
     /* Now waiters must rendez-vous with the signaling thread and
      * let it continue.  For cond_broadcast this has heavy contention
@@ -227,7 +230,16 @@ void qemu_sem_post(QemuSemaphore *sem)
 
 int qemu_sem_timedwait(QemuSemaphore *sem, int ms)
 {
-    int rc = WaitForSingleObject(sem->sema, ms);
+    int rc;
+
+    if (ms) {
+        rcu_thread_offline();
+    }
+    rc = WaitForSingleObject(sem->sema, ms);
+    if (ms) {
+        rcu_thread_online();
+    }
+
     if (rc == WAIT_OBJECT_0) {
         return 0;
     }
@@ -267,7 +279,9 @@ void qemu_event_reset(QemuEvent *ev)
 
 void qemu_event_wait(QemuEvent *ev)
 {
+    rcu_thread_offline();
     WaitForSingleObject(ev->event, INFINITE);
+    rcu_thread_online();
 }
 
 struct QemuThreadData {

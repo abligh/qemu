@@ -232,9 +232,6 @@ static void *call_rcu_thread(void *opaque)
 {
     struct rcu_head *node;
 
-    /* This thread is just a writer.  */
-    rcu_thread_offline();
-
     for (;;) {
         int tries = 0;
         int n = atomic_read(&rcu_call_count);
