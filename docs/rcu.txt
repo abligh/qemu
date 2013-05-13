@@ -122,8 +122,8 @@ on many POSIX systems other than Linux and Solaris).
 
 For this reason, QEMU's RCU implementation resorts to manual annotation
 of "quiescent states", i.e. points where no RCU read-side critical
-section can be active.  All threads that participate in the RCU mechanism
-need to annotate such points.
+section can be active.  All threads created with qemu_thread_create
+participate in the RCU mechanism and need to annotate such points.
 
 Marking quiescent states is done with the following three APIs:
 
@@ -144,8 +144,8 @@ Marking quiescent states is done with the following three APIs:
         thread.
 
 
-Furthermore, threads that participate in the RCU mechanism must communicate
-this fact using the following APIs:
+The following APIs can be used to use RCU in a thread that is not
+created with qemu_thread_create():
 
      void rcu_register_thread(void);
 
@@ -160,8 +160,9 @@ this fact using the following APIs:
         either manually or by using the QemuCond/QemuSemaphore/QemuEvent
         APIs.
 
-Note that these APIs are relatively heavyweight, and should _not_ be
-nested.
+Note that these APIs are relatively heavyweight, should _not_ be
+nested, and should not be called in threads that are created with
+qemu_thread_create().
 
 
 DIFFERENCES WITH LINUX

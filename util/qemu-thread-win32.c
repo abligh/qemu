@@ -295,6 +295,7 @@ static unsigned __stdcall win32_start_routine(void *arg)
         data = NULL;
     }
     qemu_thread_data = data;
+    rcu_register_thread();
     qemu_thread_exit(start_routine(thread_arg));
     abort();
 }
@@ -310,6 +311,7 @@ void qemu_thread_exit(void *arg)
         data->exited = true;
         LeaveCriticalSection(&data->cs);
     }
+    rcu_unregister_thread();
     _endthreadex(0);
 }
 

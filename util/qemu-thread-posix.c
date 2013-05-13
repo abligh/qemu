@@ -26,6 +26,7 @@
 #endif
 #include "qemu/thread.h"
 #include "qemu/atomic.h"
+#include "qemu/rcu.h"
 
 static void error_exit(int err, const char *msg)
 {
@@ -384,6 +385,26 @@ void qemu_event_wait(QemuEvent *ev)
 }
 
 
+typedef struct QemuThreadData {
+    /* Passed to win32_start_routine.  */
+    void             *(*start_routine)(void *);
+    void             *arg;
+} QemuThreadData;
+
+static void *thread_start_routine(void *arg)
+{
+    QemuThreadData *data = (QemuThreadData *) arg;
+    void *(*start_routine)(void *) = data->start_routine;
+    void *thread_arg = data->arg;
+    void *ret;
+
+    rcu_register_thread();
+    g_free(data);
+    ret = start_routine(thread_arg);
+    rcu_unregister_thread();
+    return ret;
+}
+
 void qemu_thread_create(QemuThread *thread,
                        void *(*start_routine)(void*),
                        void *arg, int mode)
@@ -391,6 +412,11 @@ void qemu_thread_create(QemuThread *thread,
     sigset_t set, oldset;
     int err;
     pthread_attr_t attr;
+    QemuThreadData *data;
+
+    data = g_malloc(sizeof(*data));
+    data->start_routine = start_routine;
+    data->arg = arg;
 
     err = pthread_attr_init(&attr);
     if (err) {
@@ -406,7 +432,7 @@ void qemu_thread_create(QemuThread *thread,
     /* Leave signal handling to the iothread.  */
     sigfillset(&set);
     pthread_sigmask(SIG_SETMASK, &set, &oldset);
-    err = pthread_create(&thread->thread, &attr, start_routine, arg);
+    err = pthread_create(&thread->thread, &attr, thread_start_routine, data);
     if (err)
         error_exit(err, __func__);
 
