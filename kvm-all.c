@@ -33,6 +33,7 @@
 #include "exec/memory.h"
 #include "exec/address-spaces.h"
 #include "qemu/event_notifier.h"
+#include "qemu/rcu.h"
 #include "trace.h"
 
 /* This check must be after config-host.h is included */
@@ -1641,7 +1642,9 @@ int kvm_cpu_exec(CPUState *cpu)
         }
         qemu_mutex_unlock_iothread();
 
+        rcu_thread_offline();
         run_ret = kvm_vcpu_ioctl(cpu, KVM_RUN, 0);
+        rcu_thread_online();
 
         qemu_mutex_lock_iothread();
         kvm_arch_post_run(cpu, run);
