@@ -1,0 +1,303 @@
+Using RCU (Read-Copy-Update) for synchronization
+================================================
+
+Read-copy update (RCU) is a synchronization mechanism that is used to
+protect read-mostly data structures.  RCU is very efficient and scalable
+on the read side (it is wait-free), and thus can make the read paths
+extremely fast.
+
+RCU supports concurrency between a single writer and multiple readers,
+thus it is not used alone.  Typically, the write-side will use a lock to
+serialize multiple updates, but other approaches are possible (e.g.,
+restricting updates to a single task).  In QEMU, when a lock is used,
+this will often be the "iothread mutex", also known as the "big QEMU
+lock" (BQL).  Also, restricting updates to a single task is done in
+QEMU using the "bottom half" API.
+
+RCU is fundamentally a "wait-to-finish" mechanism.  The read side marks
+sections of code with "critical sections", and the update side will wait
+for the execution of all *currently running* critical sections before
+proceeding, or before asynchronously executing a callback.
+
+The key point here is that only the currently running critical sections
+are waited for; critical sections that are started _after_ the beginning
+of the wait do not extend the wait, despite running concurrently with
+the updater.  This is the reason why RCU is more scalable than,
+for example, reader-writer locks.  It is so much more scalable that
+the system will have a single instance of the RCU mechanism; a single
+mechanism can be used for an arbitrary number of "things", without
+having to worry about things such as contention or deadlocks.
+
+How is this possible?  The basic idea is to split updates in two phases,
+"removal" and "reclamation".  During removal, we ensure that subsequent
+readers will not be able to get a reference to the old data.  After
+removal has completed, a critical section will not be able to access
+the old data.  Therefore, critical sections that begin after removal
+do not matter; as soon as all previous critical sections have finished,
+there cannot be any readers who hold references to the data structure,
+which may not be safely reclaimed (e.g., freed or unref'ed).
+
+Here is a picutre:
+
+        thread 1                  thread 2                  thread 3
+    -------------------    ------------------------    -------------------
+    enter RCU crit.sec.
+           |                finish removal phase
+           |                begin wait
+           |                      |                    enter RCU crit.sec.
+    exit RCU crit.sec             |                           |
+                            complete wait                     |
+                            begin reclamation phase           |
+                                                       exit RCU crit.sec.
+
+
+Note how thread 3 is still executing its critical section when thread 2
+starts reclaiming data.  This is possible, because the old version of the
+data structure was not accessible at the time thread 3 began executing
+that critical section.
+
+
+RCU API
+=======
+
+The core RCU API is small:
+
+     void rcu_read_lock(void);
+
+        Used by a reader to inform the reclaimer that the reader is
+        entering an RCU read-side critical section.
+
+     void rcu_read_unlock(void);
+
+        Used by a reader to inform the reclaimer that the reader is
+        exiting an RCU read-side critical section.  Note that RCU
+        read-side critical sections may be nested and/or overlapping.
+
+     void synchronize_rcu(void);
+
+        Blocks until all pre-existing RCU read-side critical sections
+        on all threads have completed.  This marks the end of the removal
+        phase and the beginning of reclamation phase.
+
+        Note that it would be valid for another update to come while
+        synchronize_rcu is running.  Because of this, it is better that
+        the updater releases any locks it may hold before calling
+        synchronize_rcu.
+
+     typeof(*p) rcu_dereference(p);
+     typeof(*p) rcu_assign_pointer(p, typeof(*p) v);
+
+        These macros are similar to atomic_mb_read() and atomic_mb_set()
+        respectively.  However, they make some assumptions on the code
+        that calls them, which allows a more optimized implementation.
+
+        rcu_assign_pointer assumes that the update side is not going
+        to read from the data structure after "publishing" the new
+        values; that is, it assumes that all assignments happen at
+        the very end of the removal phase.
+
+        rcu_dereference assumes that whenever a single RCU critical
+        section reads multiple shared data, these reads are either
+        data-dependent or need no ordering.  This is almost always the
+        case when using RCU.  If this were not the case, you can use
+        atomic_mb_read() or smp_rmb().
+
+        If you are going to be fetching multiple fields from the
+        RCU-protected structure, repeated rcu_dereference() calls
+        would look ugly and incur unnecessary overhead on Alpha CPUs.
+        You can then do this:
+
+        p = &rcu_dereference(&head);
+        foo = head->foo;
+        bar = head->bar;
+
+
+RCU QUIESCENT STATES
+====================
+
+An efficient implementation of rcu_read_lock() and rcu_read_unlock()
+relies on the availability of fast thread-local storage.  Unfortunately,
+this is not possible on all the systems supported by QEMU (in particular
+on many POSIX systems other than Linux and Solaris).
+
+For this reason, QEMU's RCU implementation resorts to manual annotation
+of "quiescent states", i.e. points where no RCU read-side critical
+section can be active.  All threads that participate in the RCU mechanism
+need to annotate such points.
+
+Marking quiescent states is done with the following three APIs:
+
+     void rcu_quiescent_state(void);
+
+        Marks a point in the execution of the current thread where no
+        RCU read-side critical section can be active.
+
+     void rcu_thread_offline(void);
+
+        Marks the beginning of an "extended quiescent state" for the
+        current thread, i.e. an interval of time during which no
+        RCU read-side critical section can be active.
+
+     void rcu_thread_online(void);
+
+        Marks the end of an extended quiescent state for the current
+        thread.
+
+
+Furthermore, threads that participate in the RCU mechanism must communicate
+this fact using the following APIs:
+
+     void rcu_register_thread(void);
+
+        Mark a thread as taking part in the RCU mechanism.  Such a thread
+        will have to report quiescent points regularly, either manually
+        or through the QemuCond/QemuSemaphore/QemuEvent APIs.
+
+     void rcu_unregister_thread(void);
+
+        Mark a thread as not taking part anymore in the RCU mechanism.
+        It is not a problem if such a thread reports quiescent points,
+        either manually or by using the QemuCond/QemuSemaphore/QemuEvent
+        APIs.
+
+Note that these APIs are relatively heavyweight, and should _not_ be
+nested.
+
+
+DIFFERENCES WITH LINUX
+======================
+
+- Waiting on a mutex is possible, though discouraged, within an RCU critical
+  section.  This is because spinlocks are rarely (if ever) used in userspace
+  programming; not allowing this would prevent upgrading an RCU read-side
+  critical section to become an updater.
+
+- rcu_dereference and rcu_assign_pointer take a _pointer_ to the variable
+  being accessed.  Wrong usage will be detected by the compiler.
+
+- Quiescent points must be marked explicitly in the thread.
+
+
+RCU PATTERNS
+============
+
+Many patterns using read-writer locks translate directly to RCU, with
+the advantages of higher scalability and deadlock immunity.
+
+In general, RCU can be used whenever it is possible to create a new
+"version" of a data structure every time the updater runs.  This may
+sound like a very strict restriction, however:
+
+- the updater does not mean "everything that writes to a data structure",
+  but rather "everything that involves a reclamation step".  See the
+  array example below
+
+- in some cases, creating a new version of a data structure may actually
+  be very cheap.  For example, modifying the "next" pointer of a singly
+  linked list is effectively creating a new version of the list.
+
+Here are some frequently-used RCU idioms that are worth noting.
+
+
+RCU list processing
+-------------------
+
+TBD (not yet used in QEMU)
+
+
+RCU reference counting
+----------------------
+
+Because grace periods are not allowed to complete while there is an RCU
+read-side critical section in progress, the RCU read-side primitives
+may be used as a restricted reference-counting mechanism.  For example,
+consider the following code fragment:
+
+    rcu_read_lock();
+    p = rcu_dereference(&foo);
+    /* do something with p. */
+    rcu_read_unlock();
+
+The RCU read-side critical section ensures that the value of "p" remains
+valid until after the rcu_read_unlock().  In some sense, it is acquiring
+a reference to p that is later released when the critical section ends.
+The write side looks simply like this (with appropriate locking):
+
+    qemu_mutex_lock(&foo_mutex);
+    old = foo;
+    rcu_assign_pointer(&foo, new);
+    qemu_mutex_unlock(&foo_mutex);
+    synchronize_rcu();
+    free(old);
+
+Note that the same idiom would be possible with reader/writer
+locks:
+
+    read_lock(&foo_rwlock);         write_mutex_lock(&foo_rwlock);
+    p = foo;                        p = foo;
+    /* do something with p. */      foo = new;
+    read_unlock(&foo_rwlock);       free(p);
+                                    write_mutex_unlock(&foo_rwlock);
+                                    free(p);
+
+
+RCU resizable arrays
+--------------------
+
+Resizable arrays can be used with RCU.  The expensive RCU synchronization
+only needs to take place when the array is resized.  The two items to
+take care of are:
+
+- ensuring that the old version of the array is available between removal
+  and reclamation;
+
+- avoiding mismatches in the read side between the array data and the
+  array size.
+
+The first problem is avoided simply by not using realloc.  Instead,
+each resize will allocate a new array and copy the old data into it.
+The second problem would arise if the size and the data pointers were
+two members of a larger struct:
+
+    struct mystuff {
+        ...
+        int data_size;
+        int data_alloc;
+        T   *data;
+        ...
+    };
+
+Instead, we store the size of the array with the array itself:
+
+    struct arr {
+        int size;
+        int alloc;
+        T   data[];
+    };
+    struct arr *global_array;
+
+    read side:
+        rcu_read_lock();
+        struct arr *array = rcu_dereference(&global_array);
+        x = i < array->size ? array->data[i] : -1;
+        rcu_read_unlock();
+        return x;
+
+    write side (running under a lock):
+        if (global_array->size == global_array->alloc) {
+            /* Creating a new version.  */
+            new_array = g_malloc(sizeof(struct arr) +
+                                 global_array->alloc * 2 * sizeof(T));
+            new_array->size = global_array->size;
+            new_array->alloc = global_array->alloc * 2;
+            memcpy(new_array->data, global_array->data,
+                   global_array->alloc * sizeof(T));
+
+            /* Removal phase.  */
+            old_array = global_array;
+            rcu_assign_pointer(&new_array->data, new_array);
+            synchronize_rcu();
+
+            /* Reclamation phase.  */
+            free(old_array);
+        }
