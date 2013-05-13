@@ -25,6 +25,7 @@
 #include "qemu/timer.h"
 #include "block/block_int.h"
 #include "qemu/module.h"
+#include "qemu/rcu.h"
 #include "raw-aio.h"
 #include "trace.h"
 #include "block/thread-pool.h"
@@ -99,6 +100,7 @@ static int aio_worker(void *arg)
     ssize_t ret = 0;
     size_t count;
 
+    rcu_thread_offline();
     switch (aiocb->aio_type & QEMU_AIO_TYPE_MASK) {
     case QEMU_AIO_READ:
         count = handle_aiocb_rw(aiocb);
@@ -136,6 +138,7 @@ static int aio_worker(void *arg)
     }
 
     g_slice_free(RawWin32AIOData, aiocb);
+    rcu_thread_online();
     return ret;
 }
 

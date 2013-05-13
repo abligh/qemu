@@ -26,6 +26,7 @@
 #include "qemu/log.h"
 #include "block/block_int.h"
 #include "qemu/module.h"
+#include "qemu/rcu.h"
 #include "trace.h"
 #include "block/thread-pool.h"
 #include "qemu/iov.h"
@@ -735,6 +736,7 @@ static int aio_worker(void *arg)
     RawPosixAIOData *aiocb = arg;
     ssize_t ret = 0;
 
+    rcu_thread_offline();
     switch (aiocb->aio_type & QEMU_AIO_TYPE_MASK) {
     case QEMU_AIO_READ:
         ret = handle_aiocb_rw(aiocb);
@@ -774,6 +776,7 @@ static int aio_worker(void *arg)
     }
 
     g_slice_free(RawPosixAIOData, aiocb);
+    rcu_thread_online();
     return ret;
 }
 
