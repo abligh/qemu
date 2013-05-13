@@ -28,6 +28,7 @@
 #include "slirp/libslirp.h"
 #include "qemu/main-loop.h"
 #include "block/aio.h"
+#include "qemu/rcu.h"
 
 #ifndef _WIN32
 
@@ -220,13 +221,16 @@ static int os_host_main_loop_wait(uint32_t timeout)
     if (timeout > 0) {
         spin_counter = 0;
         qemu_mutex_unlock_iothread();
+        rcu_thread_offline();
     } else {
         spin_counter++;
+        rcu_quiescent_state();
     }
 
     ret = g_poll((GPollFD *)gpollfds->data, gpollfds->len, timeout);
 
     if (timeout > 0) {
+        rcu_thread_online();
         qemu_mutex_lock_iothread();
     }
 
@@ -424,7 +428,9 @@ static int os_host_main_loop_wait(uint32_t timeout)
     }
 
     qemu_mutex_unlock_iothread();
+    rcu_thread_offline();
     g_poll_ret = g_poll(poll_fds, n_poll_fds + w->num, poll_timeout);
+    rcu_thread_online();
     qemu_mutex_lock_iothread();
     if (g_poll_ret > 0) {
         for (i = 0; i < w->num; i++) {
