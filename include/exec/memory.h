@@ -26,6 +26,7 @@
 #include "qemu/queue.h"
 #include "qemu/int128.h"
 #include "qemu/notify.h"
+#include "qemu/rcu.h"
 
 #define MAX_PHYS_ADDR_SPACE_BITS 62
 #define MAX_PHYS_ADDR            (((hwaddr)1 << MAX_PHYS_ADDR_SPACE_BITS) - 1)
@@ -203,9 +204,13 @@ struct MemoryListener {
  */
 struct AddressSpace {
     /* All fields are private. */
+    struct rcu_head rcu;
     char *name;
     MemoryRegion *root;
+
+    /* Accessed via RCU.  */
     struct FlatView *current_map;
+
     int ioeventfd_nb;
     struct MemoryRegionIoeventfd *ioeventfds;
     struct AddressSpaceDispatch *dispatch;
