@@ -37,6 +37,7 @@ enum sPAPRTCEAccess {
 };
 
 struct sPAPRTCETable {
+    struct rcu_head rcu;
     uint32_t liobn;
     uint32_t window_size;
     sPAPRTCE *table;
@@ -67,6 +68,8 @@ static sPAPRTCETable *spapr_tce_find_by_liobn(uint32_t liobn)
 
     return NULL;
 }
+
+/* Called within RCU critical section */
 
 static IOMMUTLBEntry spapr_tce_translate_iommu(MemoryRegion *iommu, hwaddr addr)
 {
@@ -159,7 +162,7 @@ sPAPRTCETable *spapr_tce_new_table(DeviceState *owner, uint32_t liobn, size_t wi
     return tcet;
 }
 
-void spapr_tce_free(sPAPRTCETable *tcet)
+static void spapr_tce_do_free(sPAPRTCETable *tcet)
 {
     QLIST_REMOVE(tcet, list);
 
@@ -170,6 +173,11 @@ void spapr_tce_free(sPAPRTCETable *tcet)
     }
 
     g_free(tcet);
+}
+
+void spapr_tce_free(sPAPRTCETable *tcet)
+{
+    call_rcu(tcet, spapr_tce_do_free, rcu);
 }
 
 MemoryRegion *spapr_tce_get_iommu(sPAPRTCETable *tcet)

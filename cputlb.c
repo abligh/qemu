@@ -267,8 +267,9 @@ void tlb_set_page(CPUArchState *env, target_ulong vaddr,
         tlb_add_large_page(env, vaddr, size);
     }
 
+    rcu_read_lock();
     sz = size;
-    d = address_space_memory.dispatch;
+    d = rcu_dereference(&address_space_memory.dispatch);
     section = address_space_translate_for_iotlb(d, paddr, &xlat, &sz);
     assert(sz >= TARGET_PAGE_SIZE);
 
@@ -321,6 +322,7 @@ void tlb_set_page(CPUArchState *env, target_ulong vaddr,
     } else {
         te->addr_write = -1;
     }
+    rcu_read_unlock();
 }
 
 /* NOTE: this function can trigger an exception */
