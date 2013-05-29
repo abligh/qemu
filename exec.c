@@ -299,6 +299,7 @@ MemoryRegion *address_space_translate(AddressSpace *as, hwaddr addr,
 
     *plen = len;
     *xlat = addr;
+    memory_region_ref(mr);
     return mr;
 }
 
@@ -1980,6 +1981,7 @@ bool address_space_rw(AddressSpace *as, hwaddr addr, uint8_t *buf,
                 memcpy(buf, ptr, l);
             }
         }
+        memory_region_unref(mr);
         len -= l;
         buf += l;
         addr += l;
@@ -2136,7 +2138,7 @@ void *address_space_map(AddressSpace *as,
         bounce.addr = addr;
         bounce.len = l;
 
-        memory_region_ref(mr);
+        /* Keep the reference to mr until address_space_unmap.  */
         bounce.mr = mr;
         if (!is_write) {
             address_space_read(as, addr, bounce.buffer, l);
@@ -2159,12 +2161,13 @@ void *address_space_map(AddressSpace *as,
 
         l = len;
         this_mr = address_space_translate(as, addr, &xlat, &l, is_write);
+        memory_region_unref(this_mr);
         if (this_mr != mr || xlat != base + done) {
             break;
         }
     }
 
-    memory_region_ref(mr);
+    /* Keep the reference to mr until address_space_unmap.  */
     *plen = done;
     return qemu_ram_ptr_length(raddr + base, plen);
 }
@@ -2262,6 +2265,7 @@ static inline uint32_t ldl_phys_internal(hwaddr addr,
             break;
         }
     }
+    memory_region_unref(mr);
     return val;
 }
 
@@ -2321,6 +2325,7 @@ static inline uint64_t ldq_phys_internal(hwaddr addr,
             break;
         }
     }
+    memory_region_unref(mr);
     return val;
 }
 
@@ -2388,6 +2393,7 @@ static inline uint32_t lduw_phys_internal(hwaddr addr,
             break;
         }
     }
+    memory_region_unref(mr);
     return val;
 }
 
@@ -2435,6 +2441,7 @@ void stl_phys_notdirty(hwaddr addr, uint32_t val)
             }
         }
     }
+    memory_region_unref(mr);
 }
 
 /* warning: addr must be aligned */
@@ -2476,6 +2483,7 @@ static inline void stl_phys_internal(hwaddr addr, uint32_t val,
         }
         invalidate_and_set_dirty(addr1, 4);
     }
+    memory_region_unref(mr);
 }
 
 void stl_phys(hwaddr addr, uint32_t val)
@@ -2539,6 +2547,7 @@ static inline void stw_phys_internal(hwaddr addr, uint32_t val,
         }
         invalidate_and_set_dirty(addr1, 2);
     }
+    memory_region_unref(mr);
 }
 
 void stw_phys(hwaddr addr, uint32_t val)
@@ -2628,12 +2637,14 @@ bool cpu_physical_memory_is_io(hwaddr phys_addr)
 {
     MemoryRegion*mr;
     hwaddr l = 1;
+    bool res;
 
     mr = address_space_translate(&address_space_memory,
                                  phys_addr, &phys_addr, &l, false);
 
-    return !(memory_region_is_ram(mr) ||
-             memory_region_is_romd(mr));
+    res = !(memory_region_is_ram(mr) || memory_region_is_romd(mr));
+    memory_region_unref(mr);
+    return res;
 }
 
 void qemu_ram_foreach_block(RAMBlockIterFunc func, void *opaque)

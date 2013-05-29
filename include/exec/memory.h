@@ -1000,7 +1000,8 @@ bool address_space_write(AddressSpace *as, hwaddr addr,
 bool address_space_read(AddressSpace *as, hwaddr addr, uint8_t *buf, int len);
 
 /* address_space_translate: translate an address range into an address space
- * into a MemoryRegion and an address range into that section
+ * into a MemoryRegion and an address range into that section.  Add a reference
+ * to that region.
  *
  * @as: #AddressSpace to be accessed
  * @addr: address within that address space
