@@ -303,11 +303,11 @@ MemoryRegion *address_space_translate(AddressSpace *as, hwaddr addr,
 }
 
 MemoryRegionSection *
-address_space_translate_for_iotlb(AddressSpace *as, hwaddr addr, hwaddr *xlat,
+address_space_translate_for_iotlb(AddressSpaceDispatch *d, hwaddr addr, hwaddr *xlat,
                                   hwaddr *plen)
 {
     MemoryRegionSection *section;
-    section = address_space_translate_internal(as->dispatch, addr, xlat, plen, false);
+    section = address_space_translate_internal(d, addr, xlat, plen, false);
 
     assert(!section->mr->iommu_ops);
     return section;
@@ -716,7 +716,8 @@ static int cpu_physical_memory_set_dirty_tracking(int enable)
     return ret;
 }
 
-hwaddr memory_region_section_get_iotlb(CPUArchState *env,
+hwaddr memory_region_section_get_iotlb(AddressSpaceDispatch *d,
+                                       CPUArchState *env,
                                        MemoryRegionSection *section,
                                        target_ulong vaddr,
                                        hwaddr paddr, hwaddr xlat,
@@ -736,7 +737,7 @@ hwaddr memory_region_section_get_iotlb(CPUArchState *env,
             iotlb |= PHYS_SECTION_ROM;
         }
     } else {
-        iotlb = section - address_space_memory.dispatch->sections;
+        iotlb = section - d->sections;
         iotlb += xlat;
     }
 

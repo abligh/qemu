@@ -19,6 +19,8 @@
 #ifndef CPUTLB_H
 #define CPUTLB_H
 
+#include <exec/memory-internal.h>
+
 #if !defined(CONFIG_USER_ONLY)
 /* cputlb.c */
 void tlb_protect_code(ram_addr_t ram_addr);
@@ -34,9 +36,10 @@ extern int tlb_flush_count;
 void tb_flush_jmp_cache(CPUArchState *env, target_ulong addr);
 
 MemoryRegionSection *
-address_space_translate_for_iotlb(AddressSpace *as, hwaddr addr, hwaddr *xlat,
-                                  hwaddr *plen);
-hwaddr memory_region_section_get_iotlb(CPUArchState *env,
+address_space_translate_for_iotlb(AddressSpaceDispatch *d, hwaddr addr,
+                                  hwaddr *xlat, hwaddr *plen);
+hwaddr memory_region_section_get_iotlb(AddressSpaceDispatch *d,
+                                       CPUArchState *env,
                                        MemoryRegionSection *section,
                                        target_ulong vaddr,
                                        hwaddr paddr, hwaddr xlat,

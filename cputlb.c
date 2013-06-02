@@ -253,6 +253,7 @@ void tlb_set_page(CPUArchState *env, target_ulong vaddr,
                   hwaddr paddr, int prot,
                   int mmu_idx, target_ulong size)
 {
+    AddressSpaceDispatch *d;
     MemoryRegionSection *section;
     unsigned int index;
     target_ulong address;
@@ -267,8 +268,8 @@ void tlb_set_page(CPUArchState *env, target_ulong vaddr,
     }
 
     sz = size;
-    section = address_space_translate_for_iotlb(&address_space_memory, paddr,
-                                                &xlat, &sz);
+    d = address_space_memory.dispatch;
+    section = address_space_translate_for_iotlb(d, paddr, &xlat, &sz);
     assert(sz >= TARGET_PAGE_SIZE);
 
 #if defined(DEBUG_TLB)
@@ -288,7 +289,7 @@ void tlb_set_page(CPUArchState *env, target_ulong vaddr,
     }
 
     code_address = address;
-    iotlb = memory_region_section_get_iotlb(env, section, vaddr, paddr, xlat,
+    iotlb = memory_region_section_get_iotlb(d, env, section, vaddr, paddr, xlat,
                                             prot, &address);
 
     index = (vaddr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
