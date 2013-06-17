@@ -103,6 +103,8 @@ static void help(void)
            "  '-S' indicates the consecutive number of bytes that must contain only zeros\n"
            "       for qemu-img to create a sparse image during conversion\n"
            "  '--output' takes the format in which the output must be done (human or json)\n"
+           "  '-n' skips the target volume creation (useful if the volume is created\n"
+           "       prior to running qemu-img)\n"
            "\n"
            "Parameters to check subcommand:\n"
            "  '-r' tries to repair any inconsistencies that are found during the check.\n"
@@ -1116,7 +1118,8 @@ out3:
 
 static int img_convert(int argc, char **argv)
 {
-    int c, ret = 0, n, n1, bs_n, bs_i, compress, cluster_size, cluster_sectors;
+    int c, ret = 0, n, n1, bs_n, bs_i, compress, cluster_size,
+        cluster_sectors, skip_create;
     int progress = 0, flags;
     const char *fmt, *out_fmt, *cache, *out_baseimg, *out_filename;
     BlockDriver *drv, *proto_drv;
@@ -1139,8 +1142,9 @@ static int img_convert(int argc, char **argv)
     cache = "unsafe";
     out_baseimg = NULL;
     compress = 0;
+    skip_create = 0;
     for(;;) {
-        c = getopt(argc, argv, "f:O:B:s:hce6o:pS:t:q");
+        c = getopt(argc, argv, "f:O:B:s:hce6o:pS:t:qn");
         if (c == -1) {
             break;
         }
@@ -1160,6 +1164,9 @@ static int img_convert(int argc, char **argv)
             break;
         case 'c':
             compress = 1;
+            break;
+        case 'n':
+            skip_create = 1;
             break;
         case 'e':
             error_report("option -e is deprecated, please use \'-o "
@@ -1329,20 +1336,22 @@ static int img_convert(int argc, char **argv)
         }
     }
 
-    /* Create the new image */
-    ret = bdrv_create(drv, out_filename, param);
-    if (ret < 0) {
-        if (ret == -ENOTSUP) {
-            error_report("Formatting not supported for file format '%s'",
-                         out_fmt);
-        } else if (ret == -EFBIG) {
-            error_report("The image size is too large for file format '%s'",
-                         out_fmt);
-        } else {
-            error_report("%s: error while converting %s: %s",
-                         out_filename, out_fmt, strerror(-ret));
+    if (!skip_create) {
+        /* Create the new image */
+        ret = bdrv_create(drv, out_filename, param);
+        if (ret < 0) {
+            if (ret == -ENOTSUP) {
+                error_report("Formatting not supported for file format '%s'",
+                             out_fmt);
+            } else if (ret == -EFBIG) {
+                error_report("The image size is too large for file format '%s'",
+                             out_fmt);
+            } else {
+                error_report("%s: error while converting %s: %s",
+                             out_filename, out_fmt, strerror(-ret));
+            }
+            goto out;
         }
-        goto out;
     }
 
     flags = BDRV_O_RDWR;
@@ -1362,6 +1371,16 @@ static int img_convert(int argc, char **argv)
     bs_offset = 0;
     bdrv_get_geometry(bs[0], &bs_sectors);
     buf = qemu_blockalign(out_bs, IO_BUF_SIZE);
+
+    if (skip_create) {
+        uint64_t out_bs_sectors = 0;
+        bdrv_get_geometry(out_bs, &out_bs_sectors);
+        if (out_bs_sectors < total_sectors) {
+            error_report("output file is smaller than input file");
+            ret = -1;
+            goto out;
+        }
+    }
 
     if (compress) {
         ret = bdrv_get_info(out_bs, &bdi);
