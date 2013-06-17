@@ -103,6 +103,7 @@ static void help(void)
            "  '-S' indicates the consecutive number of bytes that must contain only zeros\n"
            "       for qemu-img to create a sparse image during conversion\n"
            "  '--output' takes the format in which the output must be done (human or json)\n"
+           "  '-C' skips the target volume creation (useful for rbd)\n"
            "\n"
            "Parameters to check subcommand:\n"
            "  '-r' tries to repair any inconsistencies that are found during the check.\n"
@@ -1113,7 +1114,7 @@ out3:
 
 static int img_convert(int argc, char **argv)
 {
-    int c, ret = 0, n, n1, bs_n, bs_i, compress, cluster_size, cluster_sectors;
+    int c, ret = 0, n, n1, bs_n, bs_i, compress, cluster_size, cluster_sectors, skipcreate;
     int progress = 0, flags;
     const char *fmt, *out_fmt, *cache, *out_baseimg, *out_filename;
     BlockDriver *drv, *proto_drv;
@@ -1136,8 +1137,9 @@ static int img_convert(int argc, char **argv)
     cache = "unsafe";
     out_baseimg = NULL;
     compress = 0;
+    skipcreate = 0;
     for(;;) {
-        c = getopt(argc, argv, "f:O:B:s:hce6o:pS:t:q");
+        c = getopt(argc, argv, "f:O:B:s:hce6o:pS:t:qC");
         if (c == -1) {
             break;
         }
@@ -1157,6 +1159,9 @@ static int img_convert(int argc, char **argv)
             break;
         case 'c':
             compress = 1;
+            break;
+        case 'C':
+            skipcreate = 1;
             break;
         case 'e':
             error_report("option -e is deprecated, please use \'-o "
@@ -1326,20 +1331,22 @@ static int img_convert(int argc, char **argv)
         }
     }
 
-    /* Create the new image */
-    ret = bdrv_create(drv, out_filename, param);
-    if (ret < 0) {
-        if (ret == -ENOTSUP) {
-            error_report("Formatting not supported for file format '%s'",
-                         out_fmt);
-        } else if (ret == -EFBIG) {
-            error_report("The image size is too large for file format '%s'",
-                         out_fmt);
-        } else {
-            error_report("%s: error while converting %s: %s",
-                         out_filename, out_fmt, strerror(-ret));
+    if (!skipcreate) {
+        /* Create the new image */
+        ret = bdrv_create(drv, out_filename, param);
+        if (ret < 0) {
+            if (ret == -ENOTSUP) {
+                 error_report("Formatting not supported for file format '%s'",
+                              out_fmt);
+            } else if (ret == -EFBIG) {
+                 error_report("The image size is too large for file format '%s'",
+                              out_fmt);
+            } else {
+                error_report("%s: error while converting %s: %s",
+                             out_filename, out_fmt, strerror(-ret));
+            }
+            goto out;
         }
-        goto out;
     }
 
     flags = BDRV_O_RDWR;
