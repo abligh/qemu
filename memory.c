@@ -815,6 +815,7 @@ void memory_region_init(MemoryRegion *mr,
     mr->ioeventfd_nb = 0;
     mr->ioeventfds = NULL;
     mr->flush_coalesced_mmio = false;
+    mr->global_locking = true;
 }
 
 static uint64_t unassigned_mem_read(void *opaque, hwaddr addr,
@@ -1323,6 +1324,16 @@ void memory_region_clear_flush_coalesced(MemoryRegion *mr)
     if (QTAILQ_EMPTY(&mr->coalesced)) {
         mr->flush_coalesced_mmio = false;
     }
+}
+
+void memory_region_set_global_locking(MemoryRegion *mr)
+{
+    mr->global_locking = true;
+}
+
+void memory_region_clear_global_locking(MemoryRegion *mr)
+{
+    mr->global_locking = false;
 }
 
 void memory_region_add_eventfd(MemoryRegion *mr,
