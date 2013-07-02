@@ -77,6 +77,8 @@ CPUArchState *first_cpu;
  * cpu_exec().  */
 DEFINE_TLS(CPUArchState *, cpu_single_env_var);
 
+DEFINE_TLS(unsigned int, access_nesting);
+
 /* 0 = Do not count executed instructions.
    1 = Precise instruction counting.
    2 = Adaptive rate instruction counting.  */
@@ -1975,6 +1977,16 @@ static bool address_space_rw_internal(AddressSpace *as, hwaddr addr,
             }
         }
 
+        if (unlocked || access_nesting > 0) {
+            access_nesting++;
+        }
+        if (access_nesting > 1 && !memory_region_is_ram(mr) &&
+            (is_write || !memory_region_is_romd(mr))) {
+            fprintf(stderr,
+                    "warning: nested access to non-RAM memory region!\n");
+            goto skip;
+        }
+
         if (is_write) {
             if (!memory_access_is_direct(mr, is_write)) {
                 l = memory_access_size(mr, l, addr1);
@@ -2024,10 +2036,14 @@ static bool address_space_rw_internal(AddressSpace *as, hwaddr addr,
             }
         }
 
+skip:
         if (release_lock) {
             qemu_mutex_unlock_iothread();
         }
 
+        if (unlocked || access_nesting > 0) {
+            access_nesting--;
+        }
         memory_region_unref(mr);
         len -= l;
         buf += l;
