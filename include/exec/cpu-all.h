@@ -22,6 +22,7 @@
 #include "qemu-common.h"
 #include "exec/cpu-common.h"
 #include "qemu/thread.h"
+#include "qemu/tls.h"
 
 /* some important defines:
  *
@@ -358,16 +359,8 @@ void QEMU_NORETURN cpu_abort(CPUArchState *env, const char *fmt, ...)
     GCC_FMT_ATTR(2, 3);
 extern CPUArchState *first_cpu;
 
-/* This is thread-local depending on __linux__ because:
- *  - the only -user mode supporting multiple VCPU threads is linux-user
- *  - TCG system mode is single-threaded regarding VCPUs
- *  - KVM system mode is multi-threaded but limited to Linux
- */
-#if defined CONFIG_KVM || (defined CONFIG_USER_ONLY && defined CONFIG_USE_NPTL)
-extern __thread CPUArchState *cpu_single_env;
-#else
-extern CPUArchState *cpu_single_env;
-#endif
+DECLARE_TLS(CPUArchState *, cpu_single_env_var);
+#define cpu_single_env (*tls_get_cpu_single_env_var())
 
 /* Flags for use in ENV->INTERRUPT_PENDING.
 

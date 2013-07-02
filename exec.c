@@ -44,6 +44,7 @@
 #include "trace.h"
 #endif
 #include "exec/cpu-all.h"
+#include "qemu/tls.h"
 
 #include "exec/cputlb.h"
 #include "translate-all.h"
@@ -72,12 +73,8 @@ static MemoryRegion io_mem_unassigned;
 CPUArchState *first_cpu;
 
 /* current CPU in the current thread. It is only valid inside
- * cpu_exec().  See comment in include/exec/cpu-all.h.  */
-#if defined CONFIG_KVM || (defined CONFIG_USER_ONLY && defined CONFIG_USE_NPTL)
-__thread CPUArchState *cpu_single_env;
-#else
-CPUArchState *cpu_single_env;
-#endif
+ * cpu_exec().  */
+DEFINE_TLS(CPUArchState *, cpu_single_env_var);
 
 /* 0 = Do not count executed instructions.
    1 = Precise instruction counting.
@@ -319,6 +316,7 @@ address_space_translate_for_iotlb(AddressSpace *as, hwaddr addr, hwaddr *xlat,
 
 void cpu_exec_init_all(void)
 {
+    tls_alloc_cpu_single_env_var();
 #if !defined(CONFIG_USER_ONLY)
     qemu_mutex_init(&ram_list.mutex);
     memory_map_init();
