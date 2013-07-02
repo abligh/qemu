@@ -350,9 +350,6 @@ static void memory_region_read_accessor(void *opaque,
     MemoryRegion *mr = opaque;
     uint64_t tmp;
 
-    if (mr->flush_coalesced_mmio) {
-        qemu_flush_coalesced_mmio_buffer();
-    }
     tmp = mr->ops->read(mr->opaque, addr, size);
     *value |= (tmp & mask) << shift;
 }
@@ -381,9 +378,6 @@ static void memory_region_write_accessor(void *opaque,
     MemoryRegion *mr = opaque;
     uint64_t tmp;
 
-    if (mr->flush_coalesced_mmio) {
-        qemu_flush_coalesced_mmio_buffer();
-    }
     tmp = (*value >> shift) & mask;
     mr->ops->write(mr->opaque, addr, tmp, size);
 }
