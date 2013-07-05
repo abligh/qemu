@@ -84,6 +84,7 @@ typedef struct RTCState {
     Notifier clock_reset_notifier;
     LostTickPolicy lost_tick_policy;
     Notifier suspend_notifier;
+    QemuMutex lock;
 } RTCState;
 
 static void rtc_set_time(RTCState *s);
@@ -128,9 +129,11 @@ static void rtc_coalesced_timer(void *opaque)
 
     if (s->irq_coalesced != 0) {
         apic_reset_irq_delivered();
+        qemu_mutex_lock(&s->lock);
         s->cmos_data[RTC_REG_C] |= 0xc0;
         DPRINTF_C("cmos: injecting from timer\n");
         qemu_irq_raise(s->irq);
+        qemu_mutex_unlock(&s->lock);
         if (apic_get_irq_delivered()) {
             s->irq_coalesced--;
             DPRINTF_C("cmos: coalesced irqs decreased to %d\n",
@@ -180,6 +183,8 @@ static void rtc_periodic_timer(void *opaque)
 {
     RTCState *s = opaque;
 
+    qemu_mutex_lock(&s->lock);
+
     periodic_timer_update(s, s->next_periodic_time);
     s->cmos_data[RTC_REG_C] |= REG_C_PF;
     if (s->cmos_data[RTC_REG_B] & REG_B_PIE) {
@@ -200,6 +205,8 @@ static void rtc_periodic_timer(void *opaque)
 #endif
         qemu_irq_raise(s->irq);
     }
+
+    qemu_mutex_unlock(&s->lock);
 }
 
 /* handle update-ended timer */
@@ -357,6 +364,9 @@ static void rtc_update_timer(void *opaque)
     RTCState *s = opaque;
     int32_t irqs = REG_C_UF;
     int32_t new_irqs;
+    bool wakeup = false;
+
+    qemu_mutex_lock(&s->lock);
 
     assert((s->cmos_data[RTC_REG_A] & 0x60) != 0x60);
 
@@ -367,7 +377,7 @@ static void rtc_update_timer(void *opaque)
     if (qemu_clock_get_ns(rtc_clock) >= s->next_alarm_time) {
         irqs |= REG_C_AF;
         if (s->cmos_data[RTC_REG_B] & REG_B_AIE) {
-            qemu_system_wakeup_request(QEMU_WAKEUP_REASON_RTC);
+            wakeup = true;
         }
     }
 
@@ -378,6 +388,12 @@ static void rtc_update_timer(void *opaque)
         qemu_irq_raise(s->irq);
     }
     check_update_timer(s);
+
+    qemu_mutex_unlock(&s->lock);
+
+    if (wakeup) {
+        qemu_system_wakeup_request(QEMU_WAKEUP_REASON_RTC);
+    }
 }
 
 static void cmos_ioport_write(void *opaque, hwaddr addr,
@@ -394,8 +410,10 @@ static void cmos_ioport_write(void *opaque, hwaddr addr,
         case RTC_SECONDS_ALARM:
         case RTC_MINUTES_ALARM:
         case RTC_HOURS_ALARM:
+            qemu_mutex_lock(&s->lock);
             s->cmos_data[s->cmos_index] = data;
             check_update_timer(s);
+            qemu_mutex_unlock(&s->lock);
             break;
 	case RTC_IBM_PS2_CENTURY_BYTE:
             s->cmos_index = RTC_CENTURY;
@@ -408,14 +426,17 @@ static void cmos_ioport_write(void *opaque, hwaddr addr,
         case RTC_DAY_OF_MONTH:
         case RTC_MONTH:
         case RTC_YEAR:
+            qemu_mutex_lock(&s->lock);
             s->cmos_data[s->cmos_index] = data;
             /* if in set mode, do not update the time */
             if (rtc_running(s)) {
                 rtc_set_time(s);
                 check_update_timer(s);
             }
+            qemu_mutex_unlock(&s->lock);
             break;
         case RTC_REG_A:
+            qemu_mutex_lock(&s->lock);
             if ((data & 0x60) == 0x60) {
                 if (rtc_running(s)) {
                     rtc_update_time(s);
@@ -440,8 +461,10 @@ static void cmos_ioport_write(void *opaque, hwaddr addr,
                 (s->cmos_data[RTC_REG_A] & REG_A_UIP);
             periodic_timer_update(s, qemu_clock_get_ns(rtc_clock));
             check_update_timer(s);
+            qemu_mutex_unlock(&s->lock);
             break;
         case RTC_REG_B:
+            qemu_mutex_lock(&s->lock);
             if (data & REG_B_SET) {
                 /* update cmos to when the rtc was stopping */
                 if (rtc_running(s)) {
@@ -470,6 +493,7 @@ static void cmos_ioport_write(void *opaque, hwaddr addr,
             s->cmos_data[RTC_REG_B] = data;
             periodic_timer_update(s, qemu_clock_get_ns(rtc_clock));
             check_update_timer(s);
+            qemu_mutex_unlock(&s->lock);
             break;
         case RTC_REG_C:
         case RTC_REG_D:
@@ -620,20 +644,25 @@ static uint64_t cmos_ioport_read(void *opaque, hwaddr addr,
         case RTC_YEAR:
             /* if not in set mode, calibrate cmos before
              * reading*/
+            qemu_mutex_lock(&s->lock);
             if (rtc_running(s)) {
                 rtc_update_time(s);
             }
             ret = s->cmos_data[s->cmos_index];
+            qemu_mutex_unlock(&s->lock);
             break;
         case RTC_REG_A:
+            qemu_mutex_lock(&s->lock);
             if (update_in_progress(s)) {
                 s->cmos_data[s->cmos_index] |= REG_A_UIP;
             } else {
                 s->cmos_data[s->cmos_index] &= ~REG_A_UIP;
             }
             ret = s->cmos_data[s->cmos_index];
+            qemu_mutex_unlock(&s->lock);
             break;
         case RTC_REG_C:
+            qemu_mutex_lock(&s->lock);
             ret = s->cmos_data[s->cmos_index];
             qemu_irq_lower(s->irq);
             s->cmos_data[RTC_REG_C] = 0x00;
@@ -656,6 +685,7 @@ static uint64_t cmos_ioport_read(void *opaque, hwaddr addr,
                 }
             }
 #endif
+            qemu_mutex_unlock(&s->lock);
             break;
         default:
             ret = s->cmos_data[s->cmos_index];
@@ -700,6 +730,7 @@ static int rtc_post_load(void *opaque, int version_id)
 {
     RTCState *s = opaque;
 
+    qemu_mutex_lock(&s->lock);
     if (version_id <= 2) {
         rtc_set_time(s);
         s->offset = 0;
@@ -713,6 +744,7 @@ static int rtc_post_load(void *opaque, int version_id)
         }
     }
 #endif
+    qemu_mutex_unlock(&s->lock);
     return 0;
 }
 
@@ -767,6 +799,7 @@ static void rtc_reset(void *opaque)
 {
     RTCState *s = opaque;
 
+    qemu_mutex_lock(&s->lock);
     s->cmos_data[RTC_REG_B] &= ~(REG_B_PIE | REG_B_AIE | REG_B_SQWE);
     s->cmos_data[RTC_REG_C] &= ~(REG_C_UF | REG_C_IRQF | REG_C_PF | REG_C_AF);
     check_update_timer(s);
@@ -778,6 +811,7 @@ static void rtc_reset(void *opaque)
         s->irq_coalesced = 0;
     }
 #endif
+    qemu_mutex_unlock(&s->lock);
 }
 
 static const MemoryRegionOps cmos_ops = {
@@ -846,6 +880,8 @@ static void rtc_realizefn(DeviceState *dev, Error **errp)
         return;
     }
 #endif
+
+    qemu_mutex_init(&s->lock);
 
     s->periodic_timer = timer_new_ns(rtc_clock, rtc_periodic_timer, s);
     s->update_timer = timer_new_ns(rtc_clock, rtc_update_timer, s);
