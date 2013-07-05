@@ -25,6 +25,7 @@
 #include "sysemu/sysemu.h"
 #include "monitor/monitor.h"
 #include "ui/console.h"
+#include "qemu/thread.h"
 
 #include "hw/hw.h"
 
@@ -49,6 +50,7 @@ typedef struct QEMUClock {
 
     NotifierList reset_notifiers;
     int64_t last;
+    QemuMutex reset_lock;
 
     QEMUClockType type;
     bool enabled;
@@ -126,6 +128,7 @@ static void qemu_clock_init(QEMUClockType type)
     clock->last = INT64_MIN;
     QLIST_INIT(&clock->timerlists);
     notifier_list_init(&clock->reset_notifiers);
+    qemu_mutex_init(&clock->reset_lock);
     main_loop_tlg.tl[type] = timerlist_new(type, NULL, NULL);
 }
 
@@ -491,11 +494,38 @@ int64_t qemu_clock_get_ns(QEMUClockType type)
             return cpu_get_clock();
         }
     case QEMU_CLOCK_HOST:
+        qemu_mutex_lock(&clock->reset_lock);
         now = get_clock_realtime();
         last = clock->last;
         clock->last = now;
+        qemu_mutex_unlock(&clock->reset_lock);
         if (now < last) {
             notifier_list_notify(&clock->reset_notifiers, &now);
+        }
+        return now;
+    }
+}
+
+int64_t qemu_clock_get_ns_nobql(QEMUClockType type)
+{
+    int64_t now, last;
+    QEMUClock *clock = qemu_clock_ptr(type);
+
+    switch(type) {
+    case QEMU_CLOCK_REALTIME:
+        return get_clock();
+    default:
+    case QEMU_CLOCK_VIRTUAL:
+        abort();
+    case QEMU_CLOCK_HOST:
+        qemu_mutex_lock(&clock->reset_lock);
+        now = get_clock_realtime();
+        last = clock->last;
+        clock->last = now;
+        qemu_mutex_unlock(&clock->reset_lock);
+        if (now < last) {
+            /* FIXME: trigger notification over iothread (and under BQL)
+            notifier_list_notify(&clock->reset_notifiers, &now); */
         }
         return now;
     }

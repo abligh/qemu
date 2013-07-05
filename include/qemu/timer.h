@@ -78,6 +78,7 @@ extern QEMUTimerListGroup main_loop_tlg;
  * Returns: the clock value in nanoseconds
  */
 int64_t qemu_clock_get_ns(QEMUClockType type);
+int64_t qemu_clock_get_ns_nobql(QEMUClockType type);
 
 /**
  * qemu_clock_get_ms;
