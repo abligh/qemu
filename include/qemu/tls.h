@@ -25,6 +25,8 @@
 #ifndef QEMU_TLS_H
 #define QEMU_TLS_H
 
+#include <qemu/osdep.h>
+
 #ifdef CONFIG_WIN32
 
 /* Do not use GCC's "emutls" path on Windows, it is slower.

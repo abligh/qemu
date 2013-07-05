@@ -710,7 +710,7 @@ static void address_space_update_topology(AddressSpace *as)
     address_space_update_topology_pass(as, old_view, new_view, true);
 
     /* Writes are protected by the BQL.  */
-    rcu_assign_pointer(as->current_map, new_view);
+    rcu_assign_pointer(&as->current_map, new_view);
     call_rcu(old_view, flatview_unref, rcu);
 
     /* Note that all the old MemoryRegions are still alive up to this
