@@ -4061,6 +4061,8 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
+    rcu_init();
+
     init_clocks();
 
     /* init the memory */

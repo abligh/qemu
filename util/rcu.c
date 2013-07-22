@@ -299,7 +299,7 @@ void rcu_unregister_thread(void)
     qemu_mutex_unlock(&rcu_gp_lock);
 }
 
-static void __attribute__((__constructor__)) rcu_init(void)
+void rcu_init(void)
 {
     QemuThread thread;
 

@@ -173,6 +173,8 @@ extern void call_rcu1(struct rcu_head *head, RCUCBFunc *func);
       }),                                                                \
       (RCUCBFunc *)(func))
 
+void rcu_init(void);
+
 #ifdef __cplusplus
 }
 #endif
