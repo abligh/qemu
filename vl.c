@@ -3832,11 +3832,6 @@ int main(int argc, char **argv, char **envp)
     }
     loc_set_none();
 
-    if (qemu_init_main_loop()) {
-        fprintf(stderr, "qemu_init_main_loop failed\n");
-        exit(1);
-    }
-
     if (qemu_opts_foreach(qemu_find_opts("sandbox"), parse_sandbox, NULL, 0)) {
         exit(1);
     }
@@ -4061,10 +4056,13 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
+    if (qemu_init_main_loop()) {
+        fprintf(stderr, "qemu_init_main_loop failed\n");
+        exit(1);
+    }
+
     rcu_init();
     qemu_coroutine_pool_init();
-
-    init_clocks();
 
     /* init the memory */
     if (ram_size == 0) {
