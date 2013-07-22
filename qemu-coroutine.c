@@ -64,7 +64,7 @@ static void coroutine_delete(Coroutine *co)
     qemu_coroutine_delete(co);
 }
 
-static void __attribute__((constructor)) coroutine_pool_init(void)
+void qemu_coroutine_pool_init(void)
 {
     qemu_mutex_init(&pool_lock);
 }

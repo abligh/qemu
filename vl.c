@@ -4062,6 +4062,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     rcu_init();
+    qemu_coroutine_pool_init();
 
     init_clocks();
 

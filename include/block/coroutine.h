@@ -215,4 +215,6 @@ void coroutine_fn co_sleep_ns(QEMUClockType type, int64_t ns);
  * Note that this function clobbers the handlers for the file descriptor.
  */
 void coroutine_fn yield_until_fd_readable(int fd);
+
+void qemu_coroutine_pool_init(void);
 #endif /* QEMU_COROUTINE_H */
