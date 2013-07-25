@@ -209,7 +209,7 @@ static int os_host_main_loop_wait(int64_t timeout)
      * print a message to the screen.  If we run into this condition, create
      * a fake timeout in order to give the VCPU threads a chance to run.
      */
-    if (spin_counter > MAX_MAIN_LOOP_SPIN) {
+    if (!timeout && (spin_counter > MAX_MAIN_LOOP_SPIN)) {
         static bool notified;
 
         if (!notified) {
@@ -222,7 +222,7 @@ static int os_host_main_loop_wait(int64_t timeout)
         timeout = SCALE_MS;
     }
 
-    if (timeout > 0) {
+    if (timeout) {
         spin_counter = 0;
         qemu_mutex_unlock_iothread();
     } else {
@@ -231,7 +231,7 @@ static int os_host_main_loop_wait(int64_t timeout)
 
     ret = qemu_poll_ns((GPollFD *)gpollfds->data, gpollfds->len, timeout);
 
-    if (timeout > 0) {
+    if (timeout) {
         qemu_mutex_lock_iothread();
     }
 
