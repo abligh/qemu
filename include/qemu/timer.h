@@ -60,7 +60,6 @@ typedef struct QEMUTimer {
 } QEMUTimer;
 
 extern QEMUTimerListGroup main_loop_tlg;
-extern QEMUClock *qemu_clocks[QEMU_CLOCK_MAX];
 
 /*
  * QEMUClock & QEMUClockType
@@ -74,10 +73,7 @@ extern QEMUClock *qemu_clocks[QEMU_CLOCK_MAX];
  *
  * Returns: a pointer to the QEMUClock object
  */
-static inline QEMUClock *qemu_clock_ptr(QEMUClockType type)
-{
-    return qemu_clocks[type];
-}
+QEMUClock *qemu_clock_ptr(QEMUClockType type);
 
 /**
  * qemu_clock_get_ns;
