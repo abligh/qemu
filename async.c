@@ -177,6 +177,7 @@ aio_ctx_finalize(GSource     *source)
     aio_set_event_notifier(ctx, &ctx->notifier, NULL, NULL);
     event_notifier_cleanup(&ctx->notifier);
     g_array_free(ctx->pollfds, TRUE);
+    timerlistgroup_deinit(&ctx->tlg);
 }
 
 static GSourceFuncs aio_source_funcs = {
@@ -215,6 +216,7 @@ AioContext *aio_context_new(void)
     aio_set_event_notifier(ctx, &ctx->notifier, 
                            (EventNotifierHandler *)
                            event_notifier_test_and_clear, NULL);
+    timerlistgroup_init(&ctx->tlg);
 
     return ctx;
 }
