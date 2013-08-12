@@ -41,7 +41,7 @@ typedef struct AioHandler AioHandler;
 typedef void QEMUBHFunc(void *opaque);
 typedef void IOHandler(void *opaque);
 
-typedef struct AioContext {
+struct AioContext {
     GSource source;
 
     /* The list of registered AIO handlers */
@@ -69,7 +69,7 @@ typedef struct AioContext {
 
     /* Thread pool for performing work and receiving completion callbacks */
     struct ThreadPool *thread_pool;
-} AioContext;
+};
 
 /* Returns 1 if there are still outstanding AIO requests; 0 otherwise */
 typedef int (AioFlushEventNotifierHandler)(EventNotifier *e);

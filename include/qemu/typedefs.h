@@ -6,6 +6,7 @@
 typedef struct QEMUTimer QEMUTimer;
 typedef struct QEMUFile QEMUFile;
 typedef struct QEMUBH QEMUBH;
+typedef struct AioContext AioContext;
 
 struct Monitor;
 typedef struct Monitor Monitor;
