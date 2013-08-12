@@ -257,9 +257,9 @@ void qtest_memwrite(QTestState *s, uint64_t addr, const void *data, size_t size)
  * qtest_clock_step_next:
  * @s: #QTestState instance to operate on.
  *
- * Advance the vm_clock to the next deadline.
+ * Advance the QEMU_CLOCK_VIRTUAL to the next deadline.
  *
- * Returns: The current value of the vm_clock in nanoseconds.
+ * Returns: The current value of the QEMU_CLOCK_VIRTUAL in nanoseconds.
  */
 int64_t qtest_clock_step_next(QTestState *s);
 
@@ -268,9 +268,9 @@ int64_t qtest_clock_step_next(QTestState *s);
  * @s: QTestState instance to operate on.
  * @step: Number of nanoseconds to advance the clock by.
  *
- * Advance the vm_clock by @step nanoseconds.
+ * Advance the QEMU_CLOCK_VIRTUAL by @step nanoseconds.
  *
- * Returns: The current value of the vm_clock in nanoseconds.
+ * Returns: The current value of the QEMU_CLOCK_VIRTUAL in nanoseconds.
  */
 int64_t qtest_clock_step(QTestState *s, int64_t step);
 
@@ -279,9 +279,9 @@ int64_t qtest_clock_step(QTestState *s, int64_t step);
  * @s: QTestState instance to operate on.
  * @val: Nanoseconds value to advance the clock to.
  *
- * Advance the vm_clock to @val nanoseconds since the VM was launched.
+ * Advance the QEMU_CLOCK_VIRTUAL to @val nanoseconds since the VM was launched.
  *
- * Returns: The current value of the vm_clock in nanoseconds.
+ * Returns: The current value of the QEMU_CLOCK_VIRTUAL in nanoseconds.
  */
 int64_t qtest_clock_set(QTestState *s, int64_t val);
 
@@ -572,9 +572,9 @@ static inline void memwrite(uint64_t addr, const void *data, size_t size)
 /**
  * clock_step_next:
  *
- * Advance the vm_clock to the next deadline.
+ * Advance the QEMU_CLOCK_VIRTUAL to the next deadline.
  *
- * Returns: The current value of the vm_clock in nanoseconds.
+ * Returns: The current value of the QEMU_CLOCK_VIRTUAL in nanoseconds.
  */
 static inline int64_t clock_step_next(void)
 {
@@ -585,9 +585,9 @@ static inline int64_t clock_step_next(void)
  * clock_step:
  * @step: Number of nanoseconds to advance the clock by.
  *
- * Advance the vm_clock by @step nanoseconds.
+ * Advance the QEMU_CLOCK_VIRTUAL by @step nanoseconds.
  *
- * Returns: The current value of the vm_clock in nanoseconds.
+ * Returns: The current value of the QEMU_CLOCK_VIRTUAL in nanoseconds.
  */
 static inline int64_t clock_step(int64_t step)
 {
@@ -598,9 +598,9 @@ static inline int64_t clock_step(int64_t step)
  * clock_set:
  * @val: Nanoseconds value to advance the clock to.
  *
- * Advance the vm_clock to @val nanoseconds since the VM was launched.
+ * Advance the QEMU_CLOCK_VIRTUAL to @val nanoseconds since the VM was launched.
  *
- * Returns: The current value of the vm_clock in nanoseconds.
+ * Returns: The current value of the QEMU_CLOCK_VIRTUAL in nanoseconds.
  */
 static inline int64_t clock_set(int64_t val)
 {

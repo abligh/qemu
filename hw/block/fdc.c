@@ -1641,8 +1641,8 @@ static void fdctrl_handle_readid(FDCtrl *fdctrl, int direction)
     FDrive *cur_drv = get_cur_drv(fdctrl);
 
     cur_drv->head = (fdctrl->fifo[1] >> 2) & 1;
-    qemu_mod_timer(fdctrl->result_timer,
-                   qemu_get_clock_ns(vm_clock) + (get_ticks_per_sec() / 50));
+    timer_mod(fdctrl->result_timer,
+                   qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + (get_ticks_per_sec() / 50));
 }
 
 static void fdctrl_handle_format_track(FDCtrl *fdctrl, int direction)
@@ -2101,7 +2101,7 @@ static int fdctrl_init_common(FDCtrl *fdctrl)
     FLOPPY_DPRINTF("init controller\n");
     fdctrl->fifo = qemu_memalign(512, FD_SECTOR_LEN);
     fdctrl->fifo_size = 512;
-    fdctrl->result_timer = qemu_new_timer_ns(vm_clock,
+    fdctrl->result_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL,
                                           fdctrl_result_timer, fdctrl);
 
     fdctrl->version = 0x90; /* Intel 82078 controller */
