@@ -55,14 +55,14 @@ typedef struct QEMUClock QEMUClock;
 typedef struct QEMUTimerList QEMUTimerList;
 typedef void QEMUTimerCB(void *opaque);
 
-typedef struct QEMUTimer {
+struct QEMUTimer {
     int64_t expire_time;        /* in nanoseconds */
     QEMUTimerList *timer_list;
     QEMUTimerCB *cb;
     void *opaque;
     QEMUTimer *next;
     int scale;
-} QEMUTimer;
+};
 
 extern QEMUClock *qemu_clocks[QEMU_CLOCK_MAX];
 
