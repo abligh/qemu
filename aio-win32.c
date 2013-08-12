@@ -99,6 +99,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
     HANDLE events[MAXIMUM_WAIT_OBJECTS + 1];
     bool busy, progress;
     int count;
+    int timeout;
 
     rcu_quiescent_state();
     progress = false;
@@ -112,6 +113,9 @@ bool aio_poll(AioContext *ctx, bool blocking)
         blocking = false;
         progress = true;
     }
+
+    /* Run timers */
+    progress |= timerlistgroup_run_timers(&ctx->tlg);
 
     /*
      * Then dispatch any pending callbacks from the GSource.
@@ -176,7 +180,10 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
     /* wait until next event */
     while (count > 0) {
-        int timeout = blocking ? INFINITE : 0;
+        int ret;
+
+        timeout = blocking ?
+            qemu_timeout_ns_to_ms(timerlistgroup_deadline_ns(&ctx->tlg)) : 0;
 
         if (timeout) {
             rcu_thread_offline();
@@ -223,6 +230,15 @@ bool aio_poll(AioContext *ctx, bool blocking)
         events[ret - WAIT_OBJECT_0] = events[--count];
     }
 
+    if (blocking) {
+        /* Run the timers a second time. We do this because otherwise aio_wait
+         * will not note progress - and will stop a drain early - if we have
+         * a timer that was not ready to run entering g_poll but is ready
+         * after g_poll. This will only do anything if a timer has expired.
+         */
+        progress |= timerlistgroup_run_timers(ctx->timer_list);
+    }
+
     assert(progress || busy);
-    return true;
+    return progress;
 }
