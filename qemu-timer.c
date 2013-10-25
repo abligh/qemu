@@ -376,6 +376,23 @@ static bool timer_mod_ns_locked(QEMUTimerList *timer_list,
     ts->next = *pt;
     *pt = ts;
 
+    if (timer_debug_log) {
+        int64_t delta;
+
+        delta = ts->expire_time -
+            qemu_clock_get_ns(ts->timer_list->clock->type);
+        if (delta <= 0) {
+            delta = 0;
+        }
+
+        ts->tot_deltas += delta;
+        ts->num_deltas++;
+
+        if (delta < SCALE_US) {
+            ts->num_short++;
+        }
+    }
+
     return pt == &timer_list->active_timers;
 }
 
