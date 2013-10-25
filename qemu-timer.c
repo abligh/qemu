@@ -57,6 +57,7 @@ typedef struct QEMUClock {
 
 QEMUTimerListGroup main_loop_tlg;
 QEMUClock qemu_clocks[QEMU_CLOCK_MAX];
+const char *timer_debug_log;
 
 /* A QEMUTimerList is a list of timers attached to a clock. More
  * than one QEMUTimerList can be attached to each clock, for instance

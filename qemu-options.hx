@@ -3125,6 +3125,17 @@ STEXI
 prepend a timestamp to each log message.(default:on)
 ETEXI
 
+DEF("timer-debug-log", HAS_ARG, QEMU_OPTION_timer_debug_log,
+    "-timer-debug-log FILE\n"
+    "                write timer debug log to FILE (default: don't write)",
+    QEMU_ARCH_ALL)
+STEXI
+@item -timer-debug-log @var{file}
+@findex -timer-debug-log
+Write timer debug output periodically to file @var{file}. By default,
+no timer debug logging is written.
+ETEXI
+
 HXCOMM This is the last statement. Insert new options before this line!
 STEXI
 @end table

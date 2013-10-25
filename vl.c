@@ -3828,6 +3828,9 @@ int main(int argc, char **argv, char **envp)
                 }
                 configure_msg(opts);
                 break;
+            case QEMU_OPTION_timer_debug_log:
+                timer_debug_log = optarg;
+                break;
             default:
                 os_parse_cmd_args(popt->index, optarg);
             }

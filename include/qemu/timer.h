@@ -75,6 +75,7 @@ struct QEMUTimer {
 };
 
 extern QEMUTimerListGroup main_loop_tlg;
+extern const char *timer_debug_log;
 
 /*
  * QEMUClockType
