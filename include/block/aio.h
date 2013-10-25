@@ -262,12 +262,16 @@ void qemu_aio_set_fd_handler(int fd,
  *
  * Returns: a pointer to the new timer
  */
-static inline QEMUTimer *aio_timer_new(AioContext *ctx, QEMUClockType type,
-                                       int scale,
-                                       QEMUTimerCB *cb, void *opaque)
+static inline QEMUTimer *aio_timer_new_dbg(AioContext *ctx, QEMUClockType type,
+                                           int scale,
+                                           QEMUTimerCB *cb, void *opaque,
+                                           const char *dbg)
 {
-    return timer_new_tl(ctx->tlg.tl[type], scale, cb, opaque);
+    return timer_new_tl_dbg(ctx->tlg.tl[type], scale, cb, opaque, dbg);
 }
+
+#define aio_timer_new(ctx, type, scale, opaque) \
+    aio_timer_new_dbg(ctx, type, scale, opaque, TIMER_DBG)
 
 /**
  * aio_timer_init:
@@ -284,9 +288,13 @@ static inline QEMUTimer *aio_timer_new(AioContext *ctx, QEMUClockType type,
 static inline void aio_timer_init(AioContext *ctx,
                                   QEMUTimer *ts, QEMUClockType type,
                                   int scale,
-                                  QEMUTimerCB *cb, void *opaque)
+                                  QEMUTimerCB *cb, void *opaque,
+                                  const char *dbg)
 {
-    timer_init(ts, ctx->tlg.tl[type], scale, cb, opaque);
+    timer_init_dbg(ts, ctx->tlg.tl[type], scale, cb, opaque, dbg);
 }
+
+#define aio_timer_init(ctx, ts, type, scale, cb, opaque) \
+    aio_timer_init(ctx, ts, type, scale, cb, opaque, TIMER_DBG)
 
 #endif

@@ -11,6 +11,11 @@
 #define SCALE_US 1000
 #define SCALE_NS 1
 
+/* debugging macros */
+#define TIMER_STRINGIFY_(n) #n
+#define TIMER_STRINGIFY(n) TIMER_STRINGIFY_(n)
+#define TIMER_DBG __FILE__ ":" TIMER_STRINGIFY (__LINE__)
+
 /**
  * QEMUClockType:
  *
@@ -61,6 +66,12 @@ struct QEMUTimer {
     void *opaque;
     QEMUTimer *next;
     int scale;
+
+    /* these items are only used when debugging */
+    const char *dbg;
+    int64_t tot_deltas;
+    int64_t num_deltas;
+    int64_t num_short;
 };
 
 extern QEMUTimerListGroup main_loop_tlg;
@@ -415,9 +426,13 @@ int64_t timerlistgroup_deadline_ns(QEMUTimerListGroup *tlg);
  * You need not call an explicit deinit call. Simply make
  * sure it is not on a list with timer_del.
  */
-void timer_init(QEMUTimer *ts,
-                QEMUTimerList *timer_list, int scale,
-                QEMUTimerCB *cb, void *opaque);
+void timer_init_dbg(QEMUTimer *ts,
+                    QEMUTimerList *timer_list, int scale,
+                    QEMUTimerCB *cb, void *opaque,
+                    const char *dbg);
+
+#define timer_init(ts, timer_list, scale, cb, opaque) \
+    timer_init_dbg(ts, timer_list, scale, cb, opaque, TIMER_DBG)
 
 /**
  * timer_new_tl:
@@ -434,15 +449,19 @@ void timer_init(QEMUTimer *ts,
  *
  * Returns: a pointer to the timer
  */
-static inline QEMUTimer *timer_new_tl(QEMUTimerList *timer_list,
-                                      int scale,
-                                      QEMUTimerCB *cb,
-                                      void *opaque)
+static inline QEMUTimer *timer_new_tl_dbg(QEMUTimerList *timer_list,
+                                          int scale,
+                                          QEMUTimerCB *cb,
+                                          void *opaque,
+                                          const char *dbg)
 {
     QEMUTimer *ts = g_malloc0(sizeof(QEMUTimer));
-    timer_init(ts, timer_list, scale, cb, opaque);
+    timer_init_dbg(ts, timer_list, scale, cb, opaque, dbg);
     return ts;
 }
+
+#define timer_new_tl(timer_list, scale, cb, opaque) \
+    timer_new_tl_dbg(timer_list, scale, cb, opaque, TIMER_DBG)
 
 /**
  * timer_new:
@@ -456,11 +475,15 @@ static inline QEMUTimer *timer_new_tl(QEMUTimerList *timer_list,
  *
  * Returns: a pointer to the timer
  */
-static inline QEMUTimer *timer_new(QEMUClockType type, int scale,
-                                   QEMUTimerCB *cb, void *opaque)
+static inline QEMUTimer *timer_new_dbg(QEMUClockType type, int scale,
+                                       QEMUTimerCB *cb, void *opaque,
+                                       const char *dbg)
 {
-    return timer_new_tl(main_loop_tlg.tl[type], scale, cb, opaque);
+    return timer_new_tl_dbg(main_loop_tlg.tl[type], scale, cb, opaque, dbg);
 }
+
+#define timer_new(type, scale, cb, opaque) \
+    timer_new_dbg(type, scale, cb, opaque, TIMER_DBG)
 
 /**
  * timer_new_ns:
@@ -473,11 +496,14 @@ static inline QEMUTimer *timer_new(QEMUClockType type, int scale,
  *
  * Returns: a pointer to the newly created timer
  */
-static inline QEMUTimer *timer_new_ns(QEMUClockType type, QEMUTimerCB *cb,
-                                      void *opaque)
+static inline QEMUTimer *timer_new_ns_dbg(QEMUClockType type, QEMUTimerCB *cb,
+                                          void *opaque, const char *dbg)
 {
-    return timer_new(type, SCALE_NS, cb, opaque);
+    return timer_new_dbg(type, SCALE_NS, cb, opaque, dbg);
 }
+
+#define timer_new_ns(type, cb, opaque) \
+    timer_new_ns_dbg(type, cb, opaque, TIMER_DBG)
 
 /**
  * timer_new_us:
@@ -491,10 +517,13 @@ static inline QEMUTimer *timer_new_ns(QEMUClockType type, QEMUTimerCB *cb,
  * Returns: a pointer to the newly created timer
  */
 static inline QEMUTimer *timer_new_us(QEMUClockType type, QEMUTimerCB *cb,
-                                      void *opaque)
+                                      void *opaque, const char *dbg)
 {
-    return timer_new(type, SCALE_US, cb, opaque);
+    return timer_new_dbg(type, SCALE_US, cb, opaque, dbg);
 }
+
+#define timer_new_us(type, cb, opaque) \
+    timer_new_us_dbg(type, cb, opaque, TIMER_DBG)
 
 /**
  * timer_new_ms:
@@ -507,11 +536,13 @@ static inline QEMUTimer *timer_new_us(QEMUClockType type, QEMUTimerCB *cb,
  *
  * Returns: a pointer to the newly created timer
  */
-static inline QEMUTimer *timer_new_ms(QEMUClockType type, QEMUTimerCB *cb,
-                                      void *opaque)
+static inline QEMUTimer *timer_new_ms_dbg(QEMUClockType type, QEMUTimerCB *cb,
+                                          void *opaque, const char *dbg)
 {
-    return timer_new(type, SCALE_MS, cb, opaque);
+    return timer_new_dbg(type, SCALE_MS, cb, opaque, dbg);
 }
+#define timer_new_ms(type, cb, opaque) \
+    timer_new_ms_dbg(type, cb, opaque, TIMER_DBG)
 
 /**
  * timer_free:
