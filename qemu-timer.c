@@ -58,6 +58,7 @@ typedef struct QEMUClock {
 QEMUTimerListGroup main_loop_tlg;
 QEMUClock qemu_clocks[QEMU_CLOCK_MAX];
 const char *timer_debug_log;
+static int64_t timer_last_debug;
 
 /* A QEMUTimerList is a list of timers attached to a clock. More
  * than one QEMUTimerList can be attached to each clock, for instance
@@ -396,6 +397,93 @@ static bool timer_mod_ns_locked(QEMUTimerList *timer_list,
     return pt == &timer_list->active_timers;
 }
 
+static void timer_debug(void)
+{
+    GString *debug_text;
+    GString *tmpfile;
+    QEMUClockType type;
+    FILE *f;
+    uint64_t now;
+
+    if (!timer_debug_log) {
+        return;
+    }
+
+    /* In order not to avoid influencing the output, we don't use a timer
+     * here, but use this disappointingly manual method.
+     */
+    now = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
+    if ((now - timer_last_debug) < 1000 * SCALE_MS) {
+        return;
+    }
+    timer_last_debug = now;
+
+    debug_text = g_string_new("");
+    tmpfile = g_string_new(timer_debug_log);
+    g_string_append(tmpfile, ".tmp");
+
+    for (type = 0; type < QEMU_CLOCK_MAX; type++) {
+        QEMUTimerList *timer_list;
+        QEMUClock *clock = qemu_clock_ptr(type);
+
+        /* Iteration through timerlists means we need the BQL held to
+         * call this safely.
+         */
+        QLIST_FOREACH(timer_list, &clock->timerlists, list) {
+            QEMUTimer *ts;
+
+            g_string_append_printf(debug_text, "\nTimer list at %p clock %d:\n",
+                                   timer_list, (int) type);
+            g_string_append_printf(debug_text, "%18s %14s %14s %14s %s\n",
+                                   "Address",
+                                   "Expiries",
+                                   "AvgLength",
+                                   "NumShort",
+                                   "Source");
+            qemu_mutex_lock(&timer_list->active_timers_lock);
+            ts = timer_list->active_timers;
+            for (ts = timer_list->active_timers; ts; ts = ts->next) {
+                int64_t avg = -1;
+                if (ts->num_deltas) {
+                    avg = (ts->tot_deltas + (ts->num_deltas/2)) /
+                        ts->num_deltas;
+                }
+                const char *src = "unknown";
+                if (ts->dbg) {
+                    const char *slash;
+                    src = ts->dbg;
+                    slash = strrchr(src, '/');
+                    if (!slash) {
+                        slash = strrchr(src, '\\');
+                    }
+                    if (slash) {
+                        src = slash+1;
+                    }
+                }
+
+                g_string_append_printf(debug_text, "%18p %14" PRId64 " %14"
+                                       PRId64 " %14" PRId64" %s\n",
+                                       ts,
+                                       ts->num_deltas,
+                                       avg,
+                                       ts->num_short,
+                                       src);
+            }
+            qemu_mutex_unlock(&timer_list->active_timers_lock);
+        }
+    }
+
+    f = fopen(tmpfile->str, "w");
+    if (f) {
+        fprintf(f, "%s", debug_text->str);
+        fclose(f);
+        rename(tmpfile->str, timer_debug_log);
+    }
+
+    g_string_free(tmpfile, true);
+    g_string_free(debug_text, true);
+}
+
 static void timerlist_rearm(QEMUTimerList *timer_list)
 {
     /* Interrupt execution to force deadline recalculation.  */
@@ -620,6 +708,10 @@ bool qemu_clock_run_all_timers(void)
 {
     bool progress = false;
     QEMUClockType type;
+
+    if (timer_debug_log) {
+        timer_debug();
+    }
 
     for (type = 0; type < QEMU_CLOCK_MAX; type++) {
         progress |= qemu_clock_run_timers(type);
