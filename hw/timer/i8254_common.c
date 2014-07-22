@@ -276,6 +276,29 @@ static const VMStateDescription vmstate_pit_common = {
     }
 };
 
+static const VMStateDescription vmstate_pit_common_compat = {
+    .name = "i8254",
+    .version_id = 3,
+    .minimum_version_id = 2,
+    .minimum_version_id_old = 1,
+    .load_state_old = pit_load_old,
+    .pre_save = pit_dispatch_pre_save,
+    .post_load = pit_dispatch_post_load,
+    .fields = (VMStateField[]) {
+        /* qemu-kvm version_id=2 had 'flags' here which is equivalent
+         * This fixes incoming migration from qemu-kvm 1.0, but breaks
+         * incoming migration from qemu < 1.1
+         */
+        /* VMSTATE_UINT32_V(channels[0].irq_disabled, PITCommonState, 3), */
+        VMSTATE_UINT32(channels[0].irq_disabled, PITCommonState),
+        VMSTATE_STRUCT_ARRAY(channels, PITCommonState, 3, 2,
+                             vmstate_pit_channel, PITChannelState),
+        VMSTATE_INT64(channels[0].next_transition_time,
+                      PITCommonState), /* formerly irq_timer */
+        VMSTATE_END_OF_LIST()
+    }
+};
+
 static void pit_common_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -288,6 +311,24 @@ static void pit_common_class_init(ObjectClass *klass, void *data)
      * done by board code.
      */
     dc->cannot_instantiate_with_device_add_yet = true;
+}
+
+void pit_common_class_fix_compat(void)
+{
+    GSList *el, *devices = object_class_get_list(TYPE_DEVICE, false);
+    /*
+     * Change the vmstate field in this class and any derived classes
+     * if not overriden. As no other classes should be using this
+     * vmstate, we can simply iterate the class list
+     */
+    for (el = devices; el; el = el->next) {
+        DeviceClass *dc = el->data;
+        if (dc->vmsd == &vmstate_pit_common) {
+            dc->vmsd = &vmstate_pit_common_compat;
+        }
+    }
+
+    g_slist_free(devices);
 }
 
 static const TypeInfo pit_common_type = {

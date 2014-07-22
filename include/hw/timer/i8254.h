@@ -72,4 +72,6 @@ static inline ISADevice *kvm_pit_init(ISABus *bus, int base)
 void pit_set_gate(ISADevice *dev, int channel, int val);
 void pit_get_channel_info(ISADevice *dev, int channel, PITChannelInfo *info);
 
+void pit_common_class_fix_compat(void);
+
 #endif /* !HW_I8254_H */
