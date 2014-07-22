@@ -49,6 +49,8 @@
 #include "hw/acpi/acpi.h"
 #include "cpu.h"
 #include "qemu/error-report.h"
+#include "hw/acpi/piix4.h"
+#include "hw/timer/i8254.h"
 #ifdef CONFIG_XEN
 #  include <xen/hvm/hvm_info_table.h>
 #endif
@@ -386,6 +388,15 @@ static void pc_init_pci_1_2(MachineState *machine)
     pc_init_pci(machine);
 }
 
+/* PC machine init function for qemu-kvm 1.0 */
+static void pc_init_pci_1_2_qemu_kvm(MachineState *machine)
+{
+    piix4_pm_class_fix_compat();
+    pit_common_class_fix_compat();
+    pc_compat_1_2(machine);
+    pc_init_pci(machine);
+}
+
 /* PC init function for pc-0.10 to pc-0.13 */
 static void pc_init_pci_no_kvmclock(MachineState *machine)
 {
@@ -644,6 +655,25 @@ static QEMUMachine pc_machine_v1_0 = {
     .hw_version = "1.0",
 };
 
+#define PC_COMPAT_1_0_QEMU_KVM \
+        PC_COMPAT_1_0,\
+        {\
+            .driver   = "cirrus-vga",\
+            .property = "vgamem_mb",\
+            .value    = stringify(16),\
+        }
+
+static QEMUMachine pc_machine_v1_0_qemu_kvm = {
+    PC_I440FX_1_2_MACHINE_OPTIONS,
+    .name = "pc-1.0-qemu-kvm",
+    .init = pc_init_pci_1_2_qemu_kvm,
+    .compat_props = (GlobalProperty[]) {
+        PC_COMPAT_1_0_QEMU_KVM,
+        { /* end of list */ }
+    },
+    .hw_version = "1.0",
+};
+
 #define PC_COMPAT_0_15 \
         PC_COMPAT_1_0
 
@@ -886,6 +916,7 @@ static void pc_machine_init(void)
     qemu_register_pc_machine(&pc_machine_v1_2);
     qemu_register_pc_machine(&pc_machine_v1_1);
     qemu_register_pc_machine(&pc_machine_v1_0);
+    qemu_register_pc_machine(&pc_machine_v1_0_qemu_kvm);
     qemu_register_pc_machine(&pc_machine_v0_15);
     qemu_register_pc_machine(&pc_machine_v0_14);
     qemu_register_pc_machine(&pc_machine_v0_13);
