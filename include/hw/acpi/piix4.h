@@ -4,5 +4,6 @@
 #include "qemu/typedefs.h"
 
 Object *piix4_pm_find(void);
+void piix4_pm_class_fix_compat(void);
 
 #endif
