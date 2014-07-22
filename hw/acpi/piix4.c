@@ -247,8 +247,9 @@ static bool vmstate_test_no_use_acpi_pci_hotplug(void *opaque, int version_id)
 }
 
 /* qemu-kvm 1.2 uses version 3 but advertised as 2
- * To support incoming qemu-kvm 1.2 migration, change version_id
- * and minimum_version_id to 2 below (which breaks migration from
+ * To support incoming qemu-kvm 1.2 migration, we support
+ * via a command line option a change to minimum_version_id
+ * of 2 in a _compat structure (which breaks migration from
  * qemu 1.2).
  *
  */
@@ -260,6 +261,34 @@ static const VMStateDescription vmstate_acpi = {
     .load_state_old = acpi_load_old,
     .post_load = vmstate_acpi_post_load,
     .fields      = (VMStateField []) {
+        VMSTATE_PCI_DEVICE(parent_obj, PIIX4PMState),
+        VMSTATE_UINT16(ar.pm1.evt.sts, PIIX4PMState),
+        VMSTATE_UINT16(ar.pm1.evt.en, PIIX4PMState),
+        VMSTATE_UINT16(ar.pm1.cnt.cnt, PIIX4PMState),
+        VMSTATE_STRUCT(apm, PIIX4PMState, 0, vmstate_apm, APMState),
+        VMSTATE_TIMER(ar.tmr.timer, PIIX4PMState),
+        VMSTATE_INT64(ar.tmr.overflow_time, PIIX4PMState),
+        VMSTATE_STRUCT(ar.gpe, PIIX4PMState, 2, vmstate_gpe, ACPIGPE),
+        VMSTATE_STRUCT_TEST(
+            acpi_pci_hotplug.acpi_pcihp_pci_status[ACPI_PCIHP_BSEL_DEFAULT],
+            PIIX4PMState,
+            vmstate_test_no_use_acpi_pci_hotplug,
+            2, vmstate_pci_status,
+            struct AcpiPciHpPciStatus),
+        VMSTATE_PCI_HOTPLUG(acpi_pci_hotplug, PIIX4PMState,
+                            vmstate_test_use_acpi_pci_hotplug),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
+static const VMStateDescription vmstate_acpi_compat = {
+    .name = "piix4_pm",
+    .version_id = 3,
+    .minimum_version_id = 2,
+    .minimum_version_id_old = 1,
+    .load_state_old = acpi_load_old,
+    .post_load = vmstate_acpi_post_load,
+    .fields      = (VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, PIIX4PMState),
         VMSTATE_UINT16(ar.pm1.evt.sts, PIIX4PMState),
         VMSTATE_UINT16(ar.pm1.evt.en, PIIX4PMState),
@@ -555,6 +584,22 @@ static void piix4_pm_class_init(ObjectClass *klass, void *data)
     dc->hotpluggable = false;
     hc->plug = piix4_pci_device_plug_cb;
     hc->unplug = piix4_pci_device_unplug_cb;
+}
+
+void piix4_pm_class_fix_compat(void)
+{
+    GSList *el, *devices = object_class_get_list(TYPE_DEVICE, false);
+    /*
+     * Change the vmstate field in this class and any derived classes
+     * if not overriden. As no other classes should be using this
+     * vmstate, we can simply iterate the class list
+     */
+    for (el = devices; el; el = el->next) {
+        DeviceClass *dc = el->data;
+        if (dc->vmsd == &vmstate_acpi) {
+            dc->vmsd = &vmstate_acpi_compat;
+        }
+    }
 }
 
 static const TypeInfo piix4_pm_info = {
