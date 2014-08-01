@@ -324,6 +324,7 @@ tpm="no"
 libssh2=""
 vhdx=""
 quorum="no"
+pc_1_0_qemu_kvm="no"
 
 # parse CC options first
 for opt do
@@ -1087,6 +1088,10 @@ for opt do
   ;;
   --enable-quorum) quorum="yes"
   ;;
+  --disable-pc-1-0-qemu-kvm) pc_1_0_qemu_kvm="no"
+  ;;
+  --enable-pc-1-0-qemu-kvm) pc_1_0_qemu_kvm="yes"
+  ;;
   *) echo "ERROR: unknown option $opt"; show_help="yes"
   ;;
   esac
@@ -1350,6 +1355,8 @@ Advanced options (experts only):
   --enable-vhdx            enable support for the Microsoft VHDX image format
   --disable-quorum         disable quorum block filter support
   --enable-quorum          enable quorum block filter support
+  --disable-pc-1-0-qemu-kvm disable pc-1.0 machine type reflecting qemu-kvm
+  --enable-pc-1-0-qemu-kvm enable pc-1.0 machine type reflecting qemu-kvm
 
 NOTE: The object files are built at the place where configure is launched
 EOF
@@ -4183,6 +4190,7 @@ echo "vhdx              $vhdx"
 echo "Quorum            $quorum"
 echo "lzo support       $lzo"
 echo "snappy support    $snappy"
+echo "pc-1.0 qemu-kvm   $pc_1_0_qemu_kvm"
 
 if test "$sdl_too_old" = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -5146,6 +5154,10 @@ fi
 
 if [ "$dtc_internal" = "yes" ]; then
   echo "config-host.h: subdir-dtc" >> $config_host_mak
+fi
+
+if test "$pc_1_0_qemu_kvm" = "yes"; then
+  echo "CONFIG_PC_1_0_QEMU_KVM=y" >> $config_host_mak
 fi
 
 # build tree in object directory in case the source is not in the current directory
