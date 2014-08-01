@@ -647,7 +647,10 @@ static QEMUMachine pc_machine_v1_1 = {
 
 static QEMUMachine pc_machine_v1_0 = {
     PC_I440FX_1_2_MACHINE_OPTIONS,
-    .name = "pc-1.0",
+    .name = "pc-1.0-qemu-git",
+#ifndef CONFIG_PC_1_0_QEMU_KVM
+    .alias = "pc-1.0",
+#endif
     .compat_props = (GlobalProperty[]) {
         PC_COMPAT_1_0,
         { /* end of list */ }
@@ -666,6 +669,9 @@ static QEMUMachine pc_machine_v1_0 = {
 static QEMUMachine pc_machine_v1_0_qemu_kvm = {
     PC_I440FX_1_2_MACHINE_OPTIONS,
     .name = "pc-1.0-qemu-kvm",
+#ifdef CONFIG_PC_1_0_QEMU_KVM
+    .alias = "pc-1.0",
+#endif
     .init = pc_init_pci_1_2_qemu_kvm,
     .compat_props = (GlobalProperty[]) {
         PC_COMPAT_1_0_QEMU_KVM,
