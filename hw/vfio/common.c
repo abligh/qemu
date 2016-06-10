@@ -682,6 +682,7 @@ static void vfio_kvm_device_add_group(VFIOGroup *group)
         .attr = KVM_DEV_VFIO_GROUP_ADD,
         .addr = (uint64_t)(unsigned long)&group->fd,
     };
+    int ret;
 
     if (!kvm_enabled()) {
         return;
@@ -700,9 +701,10 @@ static void vfio_kvm_device_add_group(VFIOGroup *group)
         vfio_kvm_device_fd = cd.fd;
     }
 
-    if (ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr)) {
-        error_report("Failed to add group %d to KVM VFIO device: %m",
-                     group->groupid);
+    ret = kvm_device_ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr);
+    if (ret < 0) {
+        error_report("Failed to add group %d to KVM VFIO device: %s",
+                     group->groupid, strerror(-ret));
     }
 #endif
 }
@@ -715,14 +717,16 @@ static void vfio_kvm_device_del_group(VFIOGroup *group)
         .attr = KVM_DEV_VFIO_GROUP_DEL,
         .addr = (uint64_t)(unsigned long)&group->fd,
     };
+    int ret;
 
     if (vfio_kvm_device_fd < 0) {
         return;
     }
 
-    if (ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr)) {
-        error_report("Failed to remove group %d from KVM VFIO device: %m",
-                     group->groupid);
+    ret = kvm_device_ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr);
+    if (ret < 0) {
+        error_report("Failed to remove group %d from KVM VFIO device: %s",
+                     group->groupid, strerror(-ret));
     }
 #endif
 }

@@ -53,11 +53,11 @@ bool kvm_arm_create_scratch_host_vcpu(const uint32_t *cpus_to_try,
     if (kvmfd < 0) {
         goto err;
     }
-    vmfd = ioctl(kvmfd, KVM_CREATE_VM, 0);
+    vmfd = kvm_device_ioctl(kvmfd, KVM_CREATE_VM, 0);
     if (vmfd < 0) {
         goto err;
     }
-    cpufd = ioctl(vmfd, KVM_CREATE_VCPU, 0);
+    cpufd = kvm_device_ioctl(vmfd, KVM_CREATE_VCPU, 0);
     if (cpufd < 0) {
         goto err;
     }
@@ -67,9 +67,9 @@ bool kvm_arm_create_scratch_host_vcpu(const uint32_t *cpus_to_try,
         goto finish;
     }
 
-    ret = ioctl(vmfd, KVM_ARM_PREFERRED_TARGET, init);
+    ret = kvm_device_ioctl(vmfd, KVM_ARM_PREFERRED_TARGET, init);
     if (ret >= 0) {
-        ret = ioctl(cpufd, KVM_ARM_VCPU_INIT, init);
+        ret = kvm_device_ioctl(cpufd, KVM_ARM_VCPU_INIT, init);
         if (ret < 0) {
             goto err;
         }
@@ -82,7 +82,7 @@ bool kvm_arm_create_scratch_host_vcpu(const uint32_t *cpus_to_try,
         while (*cpus_to_try != QEMU_KVM_ARM_TARGET_NONE) {
             init->target = *cpus_to_try++;
             memset(init->features, 0, sizeof(init->features));
-            ret = ioctl(cpufd, KVM_ARM_VCPU_INIT, init);
+            ret = kvm_device_ioctl(cpufd, KVM_ARM_VCPU_INIT, init);
             if (ret >= 0) {
                 break;
             }

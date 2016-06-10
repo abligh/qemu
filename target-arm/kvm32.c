@@ -83,7 +83,7 @@ bool kvm_arm_get_host_cpu_features(ARMHostCPUClass *ahcc)
     ahcc->dtb_compatible = "arm,arm-v7";
 
     for (i = 0; i < ARRAY_SIZE(idregs); i++) {
-        ret = ioctl(fdarray[2], KVM_GET_ONE_REG, &idregs[i]);
+        ret = kvm_device_ioctl(fdarray[2], KVM_GET_ONE_REG, &idregs[i]);
         if (ret) {
             break;
         }

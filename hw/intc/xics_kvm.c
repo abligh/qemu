@@ -157,10 +157,10 @@ static void ics_get_kvm_state(ICSState *ics)
 
         attr.attr = i + ics->offset;
 
-        ret = ioctl(icpkvm->kernel_xics_fd, KVM_GET_DEVICE_ATTR, &attr);
+        ret = kvm_device_ioctl(icpkvm->kernel_xics_fd, KVM_GET_DEVICE_ATTR, &attr);
         if (ret != 0) {
             error_report("Unable to retrieve KVM interrupt controller state"
-                    " for IRQ %d: %s", i + ics->offset, strerror(errno));
+                    " for IRQ %d: %s", i + ics->offset, strerror(-ret));
             exit(1);
         }
 
@@ -235,10 +235,10 @@ static int ics_set_kvm_state(ICSState *ics, int version_id)
             }
         }
 
-        ret = ioctl(icpkvm->kernel_xics_fd, KVM_SET_DEVICE_ATTR, &attr);
+        ret = kvm_device_ioctl(icpkvm->kernel_xics_fd, KVM_SET_DEVICE_ATTR, &attr);
         if (ret != 0) {
             error_report("Unable to restore KVM interrupt controller state"
-                    " for IRQs %d: %s", i + ics->offset, strerror(errno));
+                    " for IRQs %d: %s", i + ics->offset, strerror(-ret));
             return ret;
         }
     }

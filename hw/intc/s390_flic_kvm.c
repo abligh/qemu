@@ -63,9 +63,9 @@ static int flic_get_all_irqs(KVMS390FLICState *flic,
     };
     int rc;
 
-    rc = ioctl(flic->fd, KVM_GET_DEVICE_ATTR, &attr);
+    rc = kvm_device_ioctl(flic->fd, KVM_GET_DEVICE_ATTR, &attr);
 
-    return rc == -1 ? -errno : rc;
+    return rc;
 }
 
 static void flic_enable_pfault(KVMS390FLICState *flic)
@@ -75,7 +75,7 @@ static void flic_enable_pfault(KVMS390FLICState *flic)
     };
     int rc;
 
-    rc = ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
+    rc = kvm_device_ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
 
     if (rc) {
         fprintf(stderr, "flic: couldn't enable pfault\n");
@@ -89,7 +89,7 @@ static void flic_disable_wait_pfault(KVMS390FLICState *flic)
     };
     int rc;
 
-    rc = ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
+    rc = kvm_device_ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
 
     if (rc) {
         fprintf(stderr, "flic: couldn't disable pfault\n");
@@ -113,7 +113,7 @@ static int flic_enqueue_irqs(void *buf, uint64_t len,
         .attr = len,
     };
 
-    rc = ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
+    rc = kvm_device_ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
 
     return rc ? -errno : 0;
 }
@@ -174,7 +174,7 @@ static int kvm_s390_register_io_adapter(S390FLICState *fs, uint32_t id,
         .swap = swap,
     };
     KVMS390FLICState *flic = KVM_S390_FLIC(fs);
-    int r, ret;
+    int r;
     struct kvm_device_attr attr = {
         .group = KVM_DEV_FLIC_ADAPTER_REGISTER,
         .addr = (uint64_t)&adapter,
@@ -185,10 +185,9 @@ static int kvm_s390_register_io_adapter(S390FLICState *fs, uint32_t id,
         return 0;
     }
 
-    r = ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
+    r = kvm_device_ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
 
-    ret = r ? -errno : 0;
-    return ret;
+    return r;
 }
 
 static int kvm_s390_io_adapter_map(S390FLICState *fs, uint32_t id,
@@ -211,8 +210,8 @@ static int kvm_s390_io_adapter_map(S390FLICState *fs, uint32_t id,
         return 0;
     }
 
-    r = ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
-    return r ? -errno : 0;
+    r = kvm_device_ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
+    return r;
 }
 
 static int kvm_s390_add_adapter_routes(S390FLICState *fs,
@@ -398,9 +397,9 @@ static void kvm_s390_flic_reset(DeviceState *dev)
 
     flic_disable_wait_pfault(flic);
 
-    rc = ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
+    rc = kvm_device_ioctl(flic->fd, KVM_SET_DEVICE_ATTR, &attr);
     if (rc) {
-        trace_flic_reset_failed(errno);
+        trace_flic_reset_failed(-rc);
     }
 
     flic_enable_pfault(flic);
