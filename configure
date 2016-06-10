@@ -321,6 +321,9 @@ numa=""
 tcmalloc="no"
 jemalloc="no"
 
+# Mac OS X>=10.10.3 Hypervisor.Framework (hvf)
+hvf="no"
+
 # parse CC options first
 for opt do
   optarg=`expr "x$opt" : 'x[^=]*=\(.*\)'`
@@ -917,6 +920,10 @@ for opt do
   ;;
   --enable-kvm) kvm="yes"
   ;;
+  --disable-hvf) hvf="no"
+  ;;
+  --enable-hvf) hvf="yes"
+  ;;
   --disable-tcg-interpreter) tcg_interpreter="no"
   ;;
   --enable-tcg-interpreter) tcg_interpreter="yes"
@@ -1340,6 +1347,7 @@ disabled with --disable-FEATURE, default is enabled if available:
   fdt             fdt device tree
   bluez           bluez stack connectivity
   kvm             KVM acceleration support
+  hvf             Mac OS X Hypervisor.Framework
   rdma            RDMA-based migration support
   uuid            uuid support
   vde             support for vde network
@@ -4522,6 +4530,29 @@ elif test "$debug" = "no"; then
 fi
 
 ##########################################
+# Hypervisor.Framework check
+
+if test "$hvf" != "no" ; then
+    if test "$darwin" != yes ; then
+            feature_not_found "hvf" "Hypervisor.Framework requires Mac/Darwin"
+    fi
+    cat > $TMPC << EOF
+#include <Hypervisor/hv.h>
+#include <Hypervisor/hv_vmx.h>
+int main(void) { hv_vm_create(HV_VM_DEFAULT); return 0; }
+EOF
+    if compile_prog "" "-framework Hypervisor" ; then
+        libs_softmmu="$libs_softmmu -framework Hypervisor"
+        hvf="yes"
+    else
+        if test "$hvf" = "yes"; then
+            feature_not_found "hvf" "Hypervisor.Framework not found"
+        fi
+        hvf="no"
+    fi
+fi
+
+##########################################
 # Do we have libnfs
 if test "$libnfs" != "no" ; then
   if $pkg_config --atleast-version=1.9.3 libnfs; then
@@ -4815,6 +4846,7 @@ echo "Linux AIO support $linux_aio"
 echo "ATTR/XATTR support $attr"
 echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
+echo "HVF support       $hvf"
 echo "RDMA support      $rdma"
 echo "TCG interpreter   $tcg_interpreter"
 echo "fdt support       $fdt"
@@ -5748,6 +5780,16 @@ case "$target_name" in
     fi
     ;;
   *)
+esac
+case "$target_name" in
+  i386|x86_64)
+    if test "$hvf" = yes; then
+      echo "CONFIG_HVF=y" >> $config_target_mak
+      #TODO: avoid writing 'CONFIG_VHOST_NET=y' twice (below in kvm)
+      if test "$vhost_net" = "yes" ; then
+        echo "CONFIG_VHOST_NET=y" >> $config_target_mak
+      fi
+    fi
 esac
 case "$target_name" in
   aarch64|arm|i386|x86_64|ppcemb|ppc|ppc64|s390x|mipsel|mips)
