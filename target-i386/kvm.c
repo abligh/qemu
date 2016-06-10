@@ -18,11 +18,9 @@
 #include <sys/mman.h>
 #include <sys/utsname.h>
 
-#include <linux/kvm.h>
-#include <linux/kvm_para.h>
-
 #include "qemu-common.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/kvm.h"
 #include "sysemu/kvm_int.h"
 #include "kvm_i386.h"
 #include "cpu.h"

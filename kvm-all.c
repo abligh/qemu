@@ -17,8 +17,6 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
-#include <linux/kvm.h>
-
 #include "qemu-common.h"
 #include "qemu/atomic.h"
 #include "qemu/option.h"
@@ -36,12 +34,18 @@
 #include "qemu/event_notifier.h"
 #include "trace.h"
 #include "hw/irq.h"
+#include "sysemu/kvm.h"
+#include "kvmstate.h"
 
 #include "hw/boards.h"
 
 /* This check must be after config-host.h is included */
 #ifdef CONFIG_EVENTFD
 #include <sys/eventfd.h>
+#endif
+
+#ifdef CONFIG_HVF
+#include "hvf.h"
 #endif
 
 /* KVM uses PAGE_SIZE in its definition of KVM_COALESCED_MMIO_MAX. We
@@ -58,43 +62,6 @@
 #define DPRINTF(fmt, ...) \
     do { } while (0)
 #endif
-
-#define KVM_MSI_HASHTAB_SIZE    256
-
-struct KVMState
-{
-    AccelState parent_obj;
-
-    int nr_slots;
-    int fd;
-    int vmfd;
-    int coalesced_mmio;
-    struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
-    bool coalesced_flush_in_progress;
-    int broken_set_mem_region;
-    int vcpu_events;
-    int robust_singlestep;
-    int debugregs;
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    struct kvm_sw_breakpoint_head kvm_sw_breakpoints;
-#endif
-    int many_ioeventfds;
-    int intx_set_mask;
-    /* The man page (and posix) say ioctl numbers are signed int, but
-     * they're not.  Linux, glibc and *BSD all treat ioctl numbers as
-     * unsigned, and treating them as signed here can break things */
-    unsigned irq_set_ioctl;
-    unsigned int sigmask_len;
-    GHashTable *gsimap;
-#ifdef KVM_CAP_IRQ_ROUTING
-    struct kvm_irq_routing *irq_routes;
-    int nr_allocated_irq_routes;
-    unsigned long *used_gsi_bitmap;
-    unsigned int gsi_count;
-    QTAILQ_HEAD(msi_hashtab, KVMMSIRoute) msi_hashtab[KVM_MSI_HASHTAB_SIZE];
-#endif
-    KVMMemoryListener memory_listener;
-};
 
 KVMState *kvm_state;
 bool kvm_kernel_irqchip;
@@ -262,6 +229,15 @@ int kvm_init_vcpu(CPUState *cpu)
         goto err;
     }
 
+#ifdef CONFIG_HVF
+    cpu->hvf_id = hvf_get_hvf_id(cpu->kvm_fd);
+    cpu->kvm_run = hvf_get_kvm_run(cpu->kvm_fd);
+    if (!cpu->kvm_run) {
+        ret = -EINVAL;
+        DPRINTF("Getting kvm_run failed\n");
+        goto err;
+    }
+#else
     cpu->kvm_run = mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED,
                         cpu->kvm_fd, 0);
     if (cpu->kvm_run == MAP_FAILED) {
@@ -269,7 +245,8 @@ int kvm_init_vcpu(CPUState *cpu)
         DPRINTF("mmap'ing vcpu state failed\n");
         goto err;
     }
-
+#endif
+    
     if (s->coalesced_mmio && !s->coalesced_mmio_ring) {
         s->coalesced_mmio_ring =
             (void *)cpu->kvm_run + s->coalesced_mmio * PAGE_SIZE;
@@ -1496,13 +1473,20 @@ static int kvm_init(MachineState *ms)
     QTAILQ_INIT(&s->kvm_sw_breakpoints);
 #endif
     s->vmfd = -1;
-    s->fd = qemu_open("/dev/kvm", O_RDWR);
-    if (s->fd == -1) {
-        fprintf(stderr, "Could not access KVM kernel module: %m\n");
-        ret = -errno;
+#ifdef CONFIG_HVF    
+    ret = hvf_qemu_open(s);
+    if (ret < 0) {
         goto err;
     }
-
+#else
+    s->fd = qemu_open("/dev/kvm", O_RDWR);
+    if (s->fd == -1) {
+        ret = -errno;
+        fprintf(stderr, "Could not access KVM kernel module: %s\n", strerror(-ret));
+        goto err;
+    }
+#endif
+    
     ret = kvm_ioctl(s, KVM_GET_API_VERSION, 0);
     if (ret < KVM_API_VERSION) {
         if (ret >= 0) {
@@ -1676,9 +1660,13 @@ err:
     if (s->vmfd >= 0) {
         close(s->vmfd);
     }
+#ifdef CONFIG_HVF    
+    hvf_qemu_close(s);
+#else
     if (s->fd != -1) {
         close(s->fd);
     }
+#endif    
     g_free(s->memory_listener.slots);
 
     return ret;
@@ -1934,6 +1922,7 @@ int kvm_cpu_exec(CPUState *cpu)
     return ret;
 }
 
+#ifndef CONFIG_HVF
 int kvm_ioctl(KVMState *s, int type, ...)
 {
     int ret;
@@ -2005,6 +1994,7 @@ int kvm_device_ioctl(int fd, int type, ...)
     }
     return ret;
 }
+#endif
 
 int kvm_vm_check_attr(KVMState *s, uint32_t group, uint64_t attr)
 {
@@ -2101,8 +2091,11 @@ int kvm_has_intx_set_mask(void)
 void kvm_setup_guest_memory(void *start, size_t size)
 {
     if (!kvm_has_sync_mmu()) {
+#ifdef CONFIG_HVF
+        int ret = hvf_madvise_dontfork(start, size, 1);
+#else
         int ret = qemu_madvise(start, size, QEMU_MADV_DONTFORK);
-
+#endif
         if (ret) {
             perror("qemu_madvise");
             fprintf(stderr,

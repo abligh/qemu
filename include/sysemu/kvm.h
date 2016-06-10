@@ -20,8 +20,13 @@
 #include "hw/irq.h"
 
 #ifdef CONFIG_KVM
+#ifdef CONFIG_HVF
+#include <sys/ioccom.h>
+#include "sysemu/kvmkernel/kvm.h"
+#else
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
+#endif
 #else
 /* These constants must never be used at runtime if kvm_enabled() is false.
  * They exist so we don't need #ifdefs around KVM-specific code that already

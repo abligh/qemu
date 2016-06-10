@@ -60,6 +60,10 @@
 #include "qemu/mmap-alloc.h"
 #endif
 
+#ifdef CONFIG_HVF
+#include "hvf.h"
+#endif
+
 //#define DEBUG_SUBPAGE
 
 #if !defined(CONFIG_USER_ONLY)
@@ -1644,7 +1648,11 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
     if (new_block->host) {
         qemu_ram_setup_dump(new_block->host, new_block->max_length);
         qemu_madvise(new_block->host, new_block->max_length, QEMU_MADV_HUGEPAGE);
+#ifdef CONFIG_HVF
+        hvf_madvise_dontfork(new_block->host, new_block->max_length, 1);
+#else
         qemu_madvise(new_block->host, new_block->max_length, QEMU_MADV_DONTFORK);
+#endif
         if (kvm_enabled()) {
             kvm_setup_guest_memory(new_block->host, new_block->max_length);
         }

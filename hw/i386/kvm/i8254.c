@@ -72,9 +72,14 @@ static void kvm_pit_update_clock_offset(KVMPITState *s)
      */
     clock_offset = INT64_MAX;
     for (i = 0; i < CALIBRATION_ROUNDS; i++) {
+#ifdef CONFIG_HVF
+#warning "Fix kvm_pit_update_clock_offset please"
+        offset = 0;
+#else
         offset = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
         clock_gettime(CLOCK_MONOTONIC, &ts);
         offset -= ts.tv_nsec;
+#endif
         offset -= (int64_t)ts.tv_sec * 1000000000;
         if (abs64(offset) < abs64(clock_offset)) {
             clock_offset = offset;

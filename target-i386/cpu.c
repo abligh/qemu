@@ -36,7 +36,7 @@
 
 #include "hw/hw.h"
 #if defined(CONFIG_KVM)
-#include <linux/kvm_para.h>
+#include "sysemu/kvm.h"
 #endif
 
 #include "sysemu/sysemu.h"

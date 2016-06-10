@@ -22,8 +22,7 @@
 #include "hw/sysbus.h"
 #include "hw/kvm/clock.h"
 
-#include <linux/kvm.h>
-#include <linux/kvm_para.h>
+#include "sysemu/kvm.h"
 
 #define TYPE_KVM_CLOCK "kvmclock"
 #define KVM_CLOCK(obj) OBJECT_CHECK(KVMClockState, (obj), TYPE_KVM_CLOCK)

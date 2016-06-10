@@ -349,6 +349,10 @@ struct CPUState {
        (absolute value) offset as small as possible.  This reduces code
        size, especially for hosts without large memory offsets.  */
     uint32_t tcg_exit_req;
+
+#ifdef CONFIG_HVF
+    uint32_t hvf_id;
+#endif
 };
 
 QTAILQ_HEAD(CPUTailQ, CPUState);

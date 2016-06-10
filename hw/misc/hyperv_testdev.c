@@ -16,7 +16,7 @@
 #include "hw/qdev.h"
 #include "hw/isa/isa.h"
 #include "sysemu/kvm.h"
-#include "linux/kvm.h"
+#include "sysemu/kvm.h"
 #include "target-i386/hyperv.h"
 #include "kvm_i386.h"
 
